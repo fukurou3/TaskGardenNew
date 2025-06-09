@@ -120,20 +120,22 @@ export default function SkiaCalendar({
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
+    <View style={[styles.container, { height: calendarHeight }]}>
       <GestureDetector gesture={handleTap}>
         <Canvas style={{ width: calendarWidth, height: calendarHeight }}>
           <Group opacity={opacity}>
             {backgroundImage && skiaImage && (
-              <Image
-                image={skiaImage}
-                fit="cover"
-                x={0}
-                y={0}
-                width={calendarWidth}
-                height={calendarHeight}
-                opacity={0.3}
-              />
+              <Group clip={{ x: 0, y: HEADER_HEIGHT, width: calendarWidth, height: cellHeight * numRows }}>
+                <Image
+                  image={skiaImage}
+                  fit="cover"
+                  x={0}
+                  y={HEADER_HEIGHT}
+                  width={calendarWidth}
+                  height={cellHeight * numRows}
+                  opacity={0.3}
+                />
+              </Group>
             )}
 
             <Path path={gridPath} color={theme.line} style="stroke" strokeWidth={StyleSheet.hairlineWidth} />

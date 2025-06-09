@@ -47,6 +47,11 @@
     "connected_as": "{{name}} 계정으로 연동 중",
     "google_sync_description": "Google 계정과 연결하면 일정이 양방향으로 동기화됩니다."
   },
+  "focus_mode": {
+    "focusing": "집중 중",
+    "paused": "일시정지",
+    "ready": "준비됨"
+  },
   "common": {
     "loading": "로딩 중...",
     "cancel": "취소",

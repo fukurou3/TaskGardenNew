@@ -222,6 +222,19 @@ export default function SettingsScreen() {
         </View>
 
         <View style={styles.card}>
+          <Text style={styles.label}>タイマー音設定</Text>
+          <TouchableOpacity
+            style={styles.optionRowButton}
+            onPress={() => router.push('/settings/timer-sound')}
+          >
+            <Text style={styles.optionLabel}>
+              集中モード終了音を設定
+            </Text>
+            <Ionicons name="chevron-forward" size={fontSizes[fontSizeKey] + 2} color={isDark ? '#A0A0A0' : '#888'} />
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.card}>
           <Text style={styles.label}>{t('settings.google_calendar_integration', 'Googleカレンダー連携')}</Text>
           <TouchableOpacity
             style={styles.optionRowButton}

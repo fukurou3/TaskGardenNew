@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install)",
+      "Bash(npx expo install:*)",
+      "Bash(npx expo start:*)",
+      "Bash(rm:*)",
+      "Bash(npm install:*)",
+      "Bash(umask:*)",
+      "Bash(chmod:*)",
+      "Bash(find:*)",
+      "Bash(ls:*)",
+      "Bash(grep:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(npx expo run:android:*)",
+      "Bash(npx expo prebuild:*)",
+      "Bash(npx expo run:android:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git config:*)"
+    ],
+    "deny": []
+  }
+}

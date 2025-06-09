@@ -27,7 +27,7 @@ import { Ionicons } from '@expo/vector-icons';
 const CALENDAR_BG_KEY = '@calendar_background_id';
 const WEEKDAY_COLOR = '#888888';
 const SUNDAY_COLOR = '#FF6666';
-const SATURDAY_COLOR = '#66B2FF';
+const SATURDAY_COLOR = '#106ac4';
 // 曜日欄の高さに合わせて短くする
 const HEADER_HEIGHT = 24;
 const FULL_CELL_HEIGHT_FACTOR = 1.9;

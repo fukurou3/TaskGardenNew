@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,6 +20,7 @@ interface Props {
   onResume: () => void;
   onStop: () => void;
   onToggleMute: () => void;
+  onRestart: () => void;
 }
 
 export default function FocusModeOverlay({
@@ -37,102 +38,217 @@ export default function FocusModeOverlay({
   onResume,
   onStop,
   onToggleMute,
+  onRestart,
 }: Props) {
-  if (!visible) return null;
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
-  const size = width * 0.6;
-  const strokeWidth = 10;
-  const radius = size / 2 - strokeWidth / 2;
+  const size = width * 0.85;
+  const strokeWidth = 8;
+  const radius = (size / 2) - (strokeWidth / 2);
   const circumference = 2 * Math.PI * radius;
   const progress = timeRemaining / focusDurationSec;
+  
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (visible) {
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 200,
+        useNativeDriver: true,
+      }).start();
+    } else {
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 100,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [visible, fadeAnim]);
+
+  if (!visible) return null;
+  
   return (
-    <View
+    <Animated.View
       style={[
-        styles.overlay,
+        styles.contentContainer,
         {
           top: -insets.top,
           bottom: -insets.bottom,
           left: -insets.left,
           right: -insets.right,
+          opacity: fadeAnim,
         },
       ]}
     >
       <TouchableOpacity onPress={onToggleMute} style={styles.audioButton}>
-        <Ionicons name={isMuted ? 'volume-mute' : 'musical-notes'} size={24} color="#fff" />
+        <Ionicons name={isMuted ? 'volume-mute' : 'volume-high'} size={24} color="#fff" />
       </TouchableOpacity>
       <View style={styles.timerContainer}>
-        <Svg width={size} height={size} style={styles.progressCircle}>
-          <Circle
-            cx={radius}
-            cy={radius}
-            r={radius}
-            stroke="#fff"
-            strokeWidth={strokeWidth}
-            fill="none"
-            strokeDasharray={`${circumference}`}
-            strokeDashoffset={circumference * (1 - progress)}
-            rotation={-90}
-            originX={radius}
-            originY={radius}
-            strokeLinecap="round"
-          />
-        </Svg>
-        <Text style={styles.timerText}>{formatTime(timeRemaining)}</Text>
+        <View style={styles.circularTimerContainer}>
+          <Svg width={size} height={size} style={styles.progressCircle}>
+            {/* 背景の円 */}
+            <Circle
+              cx={size / 2}
+              cy={size / 2}
+              r={radius}
+              stroke="rgba(255, 255, 255, 0.08)"
+              strokeWidth={strokeWidth}
+              fill="none"
+            />
+            {/* プログレス円 */}
+            <Circle
+              cx={size / 2}
+              cy={size / 2}
+              r={radius}
+              stroke="rgba(255, 255, 255, 0.85)"
+              strokeWidth={strokeWidth}
+              fill="none"
+              strokeDasharray={`${circumference} ${circumference}`}
+              strokeDashoffset={circumference * (1 - progress)}
+              rotation={90}
+              scaleX={-1}
+              originX={size / 2}
+              originY={size / 2}
+              strokeLinecap="round"
+            />
+          </Svg>
+          <View style={[styles.timerTextContainer, { width: size, height: size }]}>
+            <Text style={styles.timerText}>{formatTime(timeRemaining)}</Text>
+            <View style={styles.statusTextContainer}>
+              {focusModeStatus === 'paused' && (
+                <Text style={styles.statusText}>
+                  {t('focus_mode.paused')}
+                </Text>
+              )}
+            </View>
+          </View>
+        </View>
         <View style={styles.controls}>
           {focusModeStatus === 'running' ? (
-            <TouchableOpacity onPress={onPause} style={styles.controlButton}>
-              <Ionicons name="pause" size={40} color="#fff" />
+            <TouchableOpacity 
+              onPress={onPause} 
+              style={styles.controlButton}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="pause" size={32} color="rgba(255, 255, 255, 0.9)" />
             </TouchableOpacity>
           ) : focusModeStatus === 'paused' ? (
-            <TouchableOpacity onPress={onResume} style={styles.controlButton}>
-              <Ionicons name="play" size={40} color="#fff" />
+            <TouchableOpacity 
+              onPress={onResume} 
+              style={styles.controlButton}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="play" size={32} color="rgba(255, 255, 255, 0.9)" />
             </TouchableOpacity>
           ) : (
-            <TouchableOpacity onPress={onStart} style={styles.controlButton}>
-              <Ionicons name="play" size={40} color="#fff" />
+            <TouchableOpacity 
+              onPress={onStart} 
+              style={styles.controlButton}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="play" size={32} color="rgba(255, 255, 255, 0.9)" />
             </TouchableOpacity>
           )}
-          <TouchableOpacity onPress={onStop} style={styles.controlButton}>
-            <Ionicons name="reload" size={40} color="#fff" />
+          <TouchableOpacity 
+            onPress={onRestart} 
+            style={styles.controlButton}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="reload" size={28} color="rgba(255, 255, 255, 0.7)" />
           </TouchableOpacity>
         </View>
       </View>
-    </View>
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
+  contentContainer: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'transparent',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    backdropFilter: 'blur(10px)',
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 10,
   },
   timerContainer: {
     alignItems: 'center',
-    padding: 30,
+    padding: 40,
+  },
+  circularTimerContainer: {
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
+  progressCircle: {
+    // SVGの位置
+  },
+  timerTextContainer: {
+    position: 'absolute',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+    elevation: 10, // Android用
+    pointerEvents: 'none',
   },
   timerText: {
-    fontSize: 60,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 20,
+    fontSize: 72,
+    fontWeight: '300',
+    color: 'rgba(255, 255, 255, 1.0)',
+    letterSpacing: 3,
+    textAlign: 'center',
+    fontFamily: 'Menlo',
+    textShadowColor: 'rgba(0, 0, 0, 0.25)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
+  },
+  statusTextContainer: {
+    height: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  statusText: {
+    fontSize: 20,
+    fontWeight: '400',
+    color: 'rgba(255, 255, 255, 0.95)',
+    letterSpacing: 2,
+    textTransform: 'uppercase',
+    textAlign: 'center',
+    fontFamily: 'Avenir Next',
+    textShadowColor: 'rgba(0, 0, 0, 0.15)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   controls: {
     flexDirection: 'row',
-    gap: 20,
+    alignItems: 'center',
+    gap: 30,
+    zIndex: 20,
+    elevation: 20,
   },
   controlButton: {
-    padding: 10,
+    padding: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 70,
+    minHeight: 70,
   },
   audioButton: {
     position: 'absolute',
-    top: 20,
-    left: 20,
-  },
-  progressCircle: {
-    marginBottom: 20,
+    top: 60,
+    right: 30,
+    padding: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    borderRadius: 30,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 1,
   },
 });

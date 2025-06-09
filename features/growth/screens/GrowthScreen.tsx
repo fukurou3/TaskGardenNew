@@ -7,8 +7,7 @@ import { useAppTheme } from '@/hooks/ThemeContext';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { useGrowth } from '../hooks/useGrowth';
-import { GROWTH_THRESHOLDS, GROWTH_POINTS_PER_FOCUS_MINUTE } from '../themes'; // GROWTH_POINTS_PER_FOCUS_MINUTE を追加
-import { Theme, GrowthStage } from '../themes/types'; // types.tsからThemeとGrowthStageを直接インポート
+import { Theme } from '../themes/types';
 import { useFocusEffect, useRouter, useLocalSearchParams } from 'expo-router';
 // Expo Go (SDK 53+) no longer supports remote notifications. Use a dev build.
 import * as Notifications from 'expo-notifications';
@@ -17,6 +16,7 @@ import ThemeSelectionModal from '../components/ThemeSelectionModal';
 import MenuModal from '../components/MenuModal';
 import DurationPickerModal from '../components/DurationPickerModal';
 import FocusModeOverlay from '../components/FocusModeOverlay';
+import TimerSoundManager from '@/lib/TimerSoundManager';
 
 
 type FocusModeStatus = 'idle' | 'running' | 'paused';
@@ -36,16 +36,11 @@ export default function GrowthScreen() {
     selectedThemeId,
     changeSelectedTheme,
     currentTheme,
-    currentThemeProgress,
     currentThemeAsset,
-    addGrowthPoints,
     reloadTasks, // タスク再読み込み関数
   } = useGrowth();
 
-  const tabBackgroundColor =
-    currentTheme.actionTabBackground === 'black' ? '#000' : '#fff';
-  const tabIconColor =
-    currentTheme.actionTabBackground === 'black' ? '#fff' : '#000';
+  const tabIconColor = '#333';
 
   const [isThemeSelectionModalVisible, setThemeSelectionModalVisible] = useState(false);
   const [isFocusModeActive, setFocusModeActive] = useState(false);
@@ -65,6 +60,19 @@ export default function GrowthScreen() {
   const startTimeRef = useRef<number>(0);
   const notificationIdRef = useRef<string | null>(null);
 
+  // 音声初期化
+  useEffect(() => {
+    const initializeAudio = async () => {
+      try {
+        const soundManager = TimerSoundManager.getInstance();
+        await soundManager.initializeAudio();
+      } catch (error) {
+        console.error('Failed to initialize audio:', error);
+      }
+    };
+    initializeAudio();
+  }, []);
+
   // GrowthScreenにフォーカスされた時にタスクを再読み込み
   useFocusEffect(
     useCallback(() => {
@@ -72,32 +80,27 @@ export default function GrowthScreen() {
     }, [reloadTasks])
   );
 
-  const getGrowthProgressText = useCallback(() => {
-    if (!currentThemeProgress) return '';
 
-    const currentPoints = currentThemeProgress.totalGrowthPoints;
-    const currentStage = currentThemeProgress.currentGrowthStage;
-    const nextStageKeys: GrowthStage[] = ['sprout', 'young', 'mature', 'ancient'];
+  const handleFocusModeCompletion = useCallback(async () => {
+    if (notificationIdRef.current) {
+      Notifications.cancelScheduledNotificationAsync(notificationIdRef.current).catch(() => {});
+      notificationIdRef.current = null;
+    }
     
-    let nextStage: GrowthStage | undefined = undefined;
-    let requiredPointsForNextStage = 0;
-
-    for (let i = 0; i < nextStageKeys.length; i++) {
-      if (GROWTH_THRESHOLDS[nextStageKeys[i]] > currentPoints) {
-        nextStage = nextStageKeys[i];
-        requiredPointsForNextStage = GROWTH_THRESHOLDS[nextStageKeys[i]];
-        break;
-      }
+    try {
+      const soundManager = TimerSoundManager.getInstance();
+      await soundManager.playTimerSound();
+    } catch (error) {
+      console.error('Failed to play timer sound:', error);
     }
-
-    if (nextStage) {
-      const pointsNeeded = requiredPointsForNextStage - currentPoints;
-      return t('growth.progress_to_next_stage', { pointsNeeded, nextStage: t(`growth.stage_${nextStage}`) });
-    } else {
-      return t('growth.max_stage_reached');
-    }
-  }, [currentThemeProgress, t]);
-
+    
+    Vibration.vibrate();
+    Alert.alert(
+      t('growth.focus_mode_completed_title'),
+      t('growth.focus_mode_completed_message', { minutes: Math.ceil(focusDurationSec / 60) }),
+      [{ text: t('common.ok') }]
+    );
+  }, [focusDurationSec, t]);
 
   // 集中モード関連のロジック
   useEffect(() => {
@@ -129,7 +132,7 @@ export default function GrowthScreen() {
         timerIntervalRef.current = null;
       }
     };
-  }, [focusModeStatus, focusDurationSec, selectedThemeId, addGrowthPoints, t]);
+  }, [focusModeStatus, handleFocusModeCompletion]);
 
 
 
@@ -145,7 +148,6 @@ export default function GrowthScreen() {
         title: t('growth.focus_mode_completed_title'),
         body: t('growth.focus_mode_completed_message', {
           minutes: Math.ceil(focusSec / 60),
-          points: Math.ceil(focusSec / 60) * GROWTH_POINTS_PER_FOCUS_MINUTE,
         }),
       },
       trigger: { seconds: focusSec, repeats: false },
@@ -200,7 +202,6 @@ export default function GrowthScreen() {
         title: t('growth.focus_mode_completed_title'),
         body: t('growth.focus_mode_completed_message', {
           minutes: Math.ceil(timeRemaining / 60),
-          points: Math.ceil(focusDurationSec / 60) * GROWTH_POINTS_PER_FOCUS_MINUTE,
         }),
       },
       trigger: { seconds: timeRemaining, repeats: false },
@@ -241,21 +242,6 @@ export default function GrowthScreen() {
     setTimeRemaining(focusDurationSec);
   }, [focusDurationSec]);
 
-  const handleFocusModeCompletion = useCallback(() => {
-    if (notificationIdRef.current) {
-      Notifications.cancelScheduledNotificationAsync(notificationIdRef.current).catch(() => {});
-      notificationIdRef.current = null;
-    }
-    Vibration.vibrate();
-    const pointsEarned = Math.ceil(focusDurationSec / 60) * GROWTH_POINTS_PER_FOCUS_MINUTE; // 正しくアクセスできる
-    addGrowthPoints(selectedThemeId!, pointsEarned);
-    Alert.alert( // Alertが正しくインポートされたので使用可能
-      t('growth.focus_mode_completed_title'),
-      t('growth.focus_mode_completed_message', { minutes: Math.ceil(focusDurationSec / 60), points: pointsEarned }),
-      [{ text: t('common.ok') }]
-    );
-  }, [focusDurationSec, selectedThemeId, addGrowthPoints, t]);
-
   const formatTime = (totalSeconds: number) => {
     const hours = Math.floor(totalSeconds / 3600);
     const minutes = Math.floor((totalSeconds % 3600) / 60);
@@ -278,18 +264,27 @@ export default function GrowthScreen() {
   const PLACEHOLDER_IMAGE_FALLBACK = require('@/assets/images/growth/placeholder.png');
 
   return (
-    <SafeAreaView style={styles.container}>
-
+    <View style={styles.container}>
       {/* 成長表示エリア */}
       <GrowthDisplay
         theme={currentTheme}
-        progress={currentThemeProgress}
         asset={currentThemeAsset || { image: PLACEHOLDER_IMAGE_FALLBACK }}
-        getProgressText={getGrowthProgressText}
       />
 
 
 
+
+      {/* 統一オーバーレイ */}
+      {(isFocusModeActive || isDurationPickerVisible) && (
+        <View style={[
+          StyleSheet.absoluteFillObject,
+          {
+            backgroundColor: 'rgba(0, 0, 0, 0.6)',
+            backdropFilter: 'blur(10px)',
+            zIndex: 5,
+          }
+        ]} />
+      )}
 
       <FocusModeOverlay
         visible={isFocusModeActive && !isDurationPickerVisible}
@@ -304,8 +299,9 @@ export default function GrowthScreen() {
         onStart={startFocusMode}
         onPause={pauseFocusMode}
         onResume={resumeFocusMode}
-        onStop={cancelTimer}
+        onStop={stopFocusMode}
         onToggleMute={toggleMute}
+        onRestart={cancelTimer}
       />
 
       <ThemeSelectionModal
@@ -338,27 +334,29 @@ export default function GrowthScreen() {
         textColor="#fff"
       />
 
-      <View style={[styles.bottomActions, { backgroundColor: tabBackgroundColor }]}>
-        <TouchableOpacity onPress={toggleMute} style={styles.bottomActionButton}>
-          <Ionicons name={isMuted ? 'volume-mute' : 'musical-notes'} size={24} color={tabIconColor} />
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={isFocusModeActive ? stopFocusMode : showDurationPicker}
-          style={styles.focusModeToggleButton}
-        >
-          <Text style={[styles.focusModeToggleText, { color: subColor }]}> 
-            {isFocusModeActive ? t('growth.focus_mode_button_stop') : t('growth.focus_mode_button_start')} 
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() => setMenuVisible(true)}
-          style={styles.bottomActionButton}
-          disabled={isFocusModeActive}
-        >
-          <Ionicons name="menu" size={24} color={tabIconColor} />
-        </TouchableOpacity>
-      </View>
-    </SafeAreaView>
+      {!isDurationPickerVisible && !isFocusModeActive && (
+        <View style={styles.bottomActions}>
+          <TouchableOpacity onPress={toggleMute} style={styles.iconButton}>
+            <Ionicons name={isMuted ? 'volume-mute' : 'volume-high'} size={24} color={tabIconColor} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={isFocusModeActive ? stopFocusMode : showDurationPicker}
+            style={styles.focusModeButton}
+          >
+            <Text style={[styles.focusModeToggleText, { color: '#333' }]}> 
+              {isFocusModeActive ? t('growth.focus_mode_button_stop') : t('growth.focus_mode_button_start')} 
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => router.push('/(tabs)/growth/dictionary')}
+            style={styles.iconButton}
+            disabled={isFocusModeActive}
+          >
+            <Ionicons name="book" size={24} color={tabIconColor} />
+          </TouchableOpacity>
+        </View>
+      )}
+    </View>
   );
 }
 
@@ -387,21 +385,36 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   bottomActions: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingVertical: 15,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderColor: '#ddd',
     paddingHorizontal: 40,
+    paddingBottom: 30,
   },
-  bottomActionButton: {
+  iconButton: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    justifyContent: 'center',
     alignItems: 'center',
   },
-  focusModeToggleButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 20,
+  focusModeButton: {
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    borderRadius: 30,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    minWidth: 120,
+    minHeight: 60,
   },
   focusModeToggleText: {
     fontWeight: 'bold',
+    fontSize: 18,
   },
 });

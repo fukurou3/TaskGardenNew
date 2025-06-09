@@ -57,14 +57,6 @@ export const useGrowth = () => {
     loadProgress();
   }, []);
 
-  // タスクが更新されたら成長ポイントを再計算
-  useEffect(() => {
-    if (tasks.length > 0 || userProgress.length > 0) {
-      updateGrowthPointsBasedOnTasks();
-    }
-  }, [tasks]);
-
-
   // 成長ポイントの更新ロジック
   const updateGrowthPointsBasedOnTasks = useCallback(async () => {
     // 実際には、完了したタスクの数や集中モードの利用時間などをTasksDatabaseから取得し、成長ポイントに換算する
@@ -107,6 +99,13 @@ export const useGrowth = () => {
       return newProgress;
     });
   }, [tasks, selectedThemeId]);
+
+  // タスクが更新されたら成長ポイントを再計算
+  useEffect(() => {
+    if (tasks.length > 0 || userProgress.length > 0) {
+      updateGrowthPointsBasedOnTasks();
+    }
+  }, [tasks.length, selectedThemeId]);
 
   const addGrowthPoints = useCallback(async (themeId: string, points: number) => {
     setUserProgress(prevProgress => {

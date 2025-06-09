@@ -68,6 +68,12 @@ export const useTasksScreenLogic = () => {
             tasks.filter(t => t.completedAt || (t.completedInstanceDates && t.completedInstanceDates.length > 0))
                  .map(t => t.folder || noFolderName)
         );
+        
+        // フォルダなしを「すべて」の直後に追加
+        if (foldersWithCompletedTasks.has(noFolderName)) {
+            tabsArr.push({ name: noFolderName, label: noFolderName });
+        }
+        
         folderOrder.forEach(folderName => {
             if (foldersWithCompletedTasks.has(folderName) && folderName !== noFolderName) {
                 tabsArr.push({ name: folderName, label: folderName });
@@ -77,11 +83,14 @@ export const useTasksScreenLogic = () => {
         remainingFolders.forEach(folderName => {
              tabsArr.push({ name: folderName, label: folderName });
         });
-        if (foldersWithCompletedTasks.has(noFolderName)) {
-            tabsArr.push({ name: noFolderName, label: noFolderName });
-        }
     } else {
         const allFolders = new Set([...folderOrder, ...uniqueFoldersFromTasks]);
+        
+        // フォルダなしを「すべて」の直後に追加
+        if (allFolders.has(noFolderName)) {
+            tabsArr.push({ name: noFolderName, label: noFolderName });
+        }
+        
         const orderedFolders = folderOrder.filter(name => allFolders.has(name) && name !== noFolderName);
         const unorderedFolders = [...allFolders].filter(name => !folderOrder.includes(name) && name !== noFolderName).sort();
 
@@ -90,10 +99,6 @@ export const useTasksScreenLogic = () => {
                 tabsArr.push({ name: folderName, label: folderName });
             }
         });
-
-        if (allFolders.has(noFolderName)) {
-            tabsArr.push({ name: noFolderName, label: noFolderName });
-        }
     }
     return tabsArr;
   }, [tasks, folderOrder, noFolderName, t, activeTab]);

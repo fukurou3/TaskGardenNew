@@ -48,6 +48,13 @@
     "login_with_google": "Googleアカウントでログイン",
     "logout": "ログアウト",
     "connected_as": "{{name}}として連携中",
+  },
+  "focus_mode": {
+    "focusing": "集中中",
+    "paused": "一時停止中",
+    "ready": "準備完了"
+  },
+  "google_sync": {
     "google_sync_description": "Googleアカウントと連携することで、カレンダーの予定を双方向で同期できるようになります。"
   },
   "common": {
