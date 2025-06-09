@@ -1,0 +1,43 @@
+# .github/workflows/deps.yml
+name: Dependencies Check
+on:
+  schedule:
+    - cron: '0 0 * * 1'  # 毎週月曜日の午前0時（UTC）
+  workflow_dispatch:  # 手動実行も可能
+
+jobs:
+  deps:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          
+      - name: Install dependencies
+        run: npm install
+        
+      - name: Check unused dependencies
+        run: npx depcheck
+        
+      - name: Security audit
+        run: npm audit
+        
+      - name: Check outdated packages
+        run: npm outdated || true  # エラーでも続行
+        
+      - name: Create issue if problems found
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '依存関係の問題が検出されました',
+              body: '自動チェックで依存関係の問題が見つかりました。詳細はActionsログを確認してください。'
+            })
