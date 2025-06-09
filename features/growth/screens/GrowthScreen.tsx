@@ -98,6 +98,20 @@ export default function GrowthScreen() {
     }
   }, [currentThemeProgress, t]);
 
+  const handleFocusModeCompletion = useCallback(() => {
+    if (notificationIdRef.current) {
+      Notifications.cancelScheduledNotificationAsync(notificationIdRef.current).catch(() => {});
+      notificationIdRef.current = null;
+    }
+    Vibration.vibrate();
+    const pointsEarned = Math.ceil(focusDurationSec / 60) * GROWTH_POINTS_PER_FOCUS_MINUTE;
+    addGrowthPoints(selectedThemeId!, pointsEarned);
+    Alert.alert(
+      t('growth.focus_mode_completed_title'),
+      t('growth.focus_mode_completed_message', { minutes: Math.ceil(focusDurationSec / 60), points: pointsEarned }),
+      [{ text: t('common.ok') }]
+    );
+  }, [focusDurationSec, selectedThemeId, addGrowthPoints, t]);
 
   // 集中モード関連のロジック
   useEffect(() => {
@@ -129,7 +143,7 @@ export default function GrowthScreen() {
         timerIntervalRef.current = null;
       }
     };
-  }, [focusModeStatus, focusDurationSec, selectedThemeId, addGrowthPoints, t]);
+  }, [focusModeStatus, handleFocusModeCompletion]);
 
 
 
@@ -241,21 +255,6 @@ export default function GrowthScreen() {
     setTimeRemaining(focusDurationSec);
   }, [focusDurationSec]);
 
-  const handleFocusModeCompletion = useCallback(() => {
-    if (notificationIdRef.current) {
-      Notifications.cancelScheduledNotificationAsync(notificationIdRef.current).catch(() => {});
-      notificationIdRef.current = null;
-    }
-    Vibration.vibrate();
-    const pointsEarned = Math.ceil(focusDurationSec / 60) * GROWTH_POINTS_PER_FOCUS_MINUTE; // 正しくアクセスできる
-    addGrowthPoints(selectedThemeId!, pointsEarned);
-    Alert.alert( // Alertが正しくインポートされたので使用可能
-      t('growth.focus_mode_completed_title'),
-      t('growth.focus_mode_completed_message', { minutes: Math.ceil(focusDurationSec / 60), points: pointsEarned }),
-      [{ text: t('common.ok') }]
-    );
-  }, [focusDurationSec, selectedThemeId, addGrowthPoints, t]);
-
   const formatTime = (totalSeconds: number) => {
     const hours = Math.floor(totalSeconds / 3600);
     const minutes = Math.floor((totalSeconds % 3600) / 60);
@@ -304,7 +303,7 @@ export default function GrowthScreen() {
         onStart={startFocusMode}
         onPause={pauseFocusMode}
         onResume={resumeFocusMode}
-        onStop={cancelTimer}
+        onStop={stopFocusMode}
         onToggleMute={toggleMute}
       />
 

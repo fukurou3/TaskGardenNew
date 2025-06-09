@@ -44,30 +44,69 @@ export default function DurationPickerModal({
             options={HOURS_OPTIONS}
             selectedIndex={hours}
             onChange={onChangeHours}
-            itemHeight={60}
-            visibleRest={1}
-            containerStyle={{ backgroundColor: 'transparent' }}
-            itemTextStyle={{ color: textColor, fontSize: 32, fontWeight: 'bold' }}
+            itemHeight={64}
+            visibleRest={2}
+            containerStyle={{ 
+              backgroundColor: 'transparent',
+              borderRadius: 12,
+            }}
+            itemTextStyle={{ 
+              color: textColor, 
+              fontSize: 28, 
+              fontWeight: '300',
+              letterSpacing: 0.5,
+            }}
+            selectedIndicatorStyle={{
+              backgroundColor: 'rgba(255, 255, 255, 0.08)',
+              borderRadius: 8,
+              marginHorizontal: 4,
+            }}
           />
           <Text style={[styles.label, { color: textColor }]}>{t('common.hours_label')}</Text>
           <WheelPicker
             options={MINUTE_SECOND_OPTIONS}
             selectedIndex={minutes}
             onChange={onChangeMinutes}
-            itemHeight={60}
-            visibleRest={1}
-            containerStyle={{ backgroundColor: 'transparent' }}
-            itemTextStyle={{ color: textColor, fontSize: 32, fontWeight: 'bold' }}
+            itemHeight={64}
+            visibleRest={2}
+            containerStyle={{ 
+              backgroundColor: 'transparent',
+              borderRadius: 12,
+            }}
+            itemTextStyle={{ 
+              color: textColor, 
+              fontSize: 28, 
+              fontWeight: '300',
+              letterSpacing: 0.5,
+            }}
+            selectedIndicatorStyle={{
+              backgroundColor: 'rgba(255, 255, 255, 0.08)',
+              borderRadius: 8,
+              marginHorizontal: 4,
+            }}
           />
           <Text style={[styles.label, { color: textColor }]}>{t('common.minutes_label')}</Text>
           <WheelPicker
             options={MINUTE_SECOND_OPTIONS}
             selectedIndex={seconds}
             onChange={onChangeSeconds}
-            itemHeight={60}
-            visibleRest={1}
-            containerStyle={{ backgroundColor: 'transparent' }}
-            itemTextStyle={{ color: textColor, fontSize: 32, fontWeight: 'bold' }}
+            itemHeight={64}
+            visibleRest={2}
+            containerStyle={{ 
+              backgroundColor: 'transparent',
+              borderRadius: 12,
+            }}
+            itemTextStyle={{ 
+              color: textColor, 
+              fontSize: 28, 
+              fontWeight: '300',
+              letterSpacing: 0.5,
+            }}
+            selectedIndicatorStyle={{
+              backgroundColor: 'rgba(255, 255, 255, 0.08)',
+              borderRadius: 8,
+              marginHorizontal: 4,
+            }}
           />
           <Text style={[styles.label, { color: textColor }]}>{t('common.seconds_label')}</Text>
         </View>
@@ -85,10 +124,61 @@ export default function DurationPickerModal({
 }
 
 const styles = StyleSheet.create({
-  overlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.5)' },
-  container: { padding: 0, backgroundColor: 'transparent' },
-  row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-evenly', marginVertical: 10 },
-  label: { marginHorizontal: 5, fontSize: 24, fontWeight: 'bold' },
-  buttonRow: { flexDirection: 'row', justifyContent: 'center', gap: 40, marginTop: 10 },
-  button: { paddingVertical: 12, paddingHorizontal: 20, alignItems: 'center' },
+  overlay: { 
+    ...StyleSheet.absoluteFillObject, 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    backgroundColor: 'rgba(0,0,0,0.75)' 
+  },
+  container: { 
+    padding: 32,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+    backdropFilter: 'blur(20px)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 8,
+  },
+  row: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'space-evenly', 
+    marginVertical: 20,
+    paddingHorizontal: 16,
+  },
+  label: { 
+    marginHorizontal: 8, 
+    fontSize: 18, 
+    fontWeight: '300',
+    letterSpacing: 0.5,
+    opacity: 0.85,
+  },
+  buttonRow: { 
+    flexDirection: 'row', 
+    justifyContent: 'center', 
+    gap: 24, 
+    marginTop: 32,
+    paddingHorizontal: 16,
+  },
+  button: { 
+    paddingVertical: 16, 
+    paddingHorizontal: 24, 
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+    minWidth: 64,
+    minHeight: 64,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 3,
+  },
 });
