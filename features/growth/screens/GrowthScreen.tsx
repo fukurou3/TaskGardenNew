@@ -133,6 +133,7 @@ export default function GrowthScreen() {
       }
     };
   }, [focusModeStatus, handleFocusModeCompletion]);
+  }, [focusModeStatus, handleFocusModeCompletion]);
 
 
 
@@ -299,6 +300,7 @@ export default function GrowthScreen() {
         onStart={startFocusMode}
         onPause={pauseFocusMode}
         onResume={resumeFocusMode}
+        onStop={stopFocusMode}
         onStop={stopFocusMode}
         onToggleMute={toggleMute}
         onRestart={cancelTimer}

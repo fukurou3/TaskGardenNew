@@ -1,6 +1,7 @@
 // app/(tabs)/_layout.tsx
 
 import React, { useContext, useCallback, useMemo } from 'react';
+import React, { useContext, useCallback, useMemo } from 'react';
 import { Tabs } from 'expo-router';
 import { BottomTabNavigationOptions } from '@react-navigation/bottom-tabs';
 import { RouteProp, ParamListBase } from '@react-navigation/native'; // 1. この行を追加
@@ -21,11 +22,14 @@ function InnerTabs() {
   const { fontSizeKey } = useContext(FontSizeContext);
 
   const fontSizeMap: Record<string, number> = useMemo(() => ({
+  const fontSizeMap: Record<string, number> = useMemo(() => ({
     small: 10,
     medium: 12,
     large: 14,
   }), []);
+  }), []);
 
+  const inactiveColor = useMemo(() => isDark ? '#CCCCCC' : '#000000', [isDark]);
   const inactiveColor = useMemo(() => isDark ? '#CCCCCC' : '#000000', [isDark]);
   
   // 2. screenOptionsに渡す関数をuseCallbackでラップします
@@ -89,6 +93,7 @@ function InnerTabs() {
       },
     };
   // 3. 依存配列に関数が依存している全ての変数を入れます
+  }, [isSelecting, insets.bottom, isDark, subColor, inactiveColor, fontSizeKey, fontSizeMap]);
   }, [isSelecting, insets.bottom, isDark, subColor, inactiveColor, fontSizeKey, fontSizeMap]);
 
   return (
