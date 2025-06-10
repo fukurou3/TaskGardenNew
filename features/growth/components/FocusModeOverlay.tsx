@@ -1,5 +1,6 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import React, { useEffect } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Platform, Modal } from 'react-native';
+import * as NavigationBar from 'expo-navigation-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
@@ -48,11 +49,39 @@ export default function FocusModeOverlay({
   const circumference = 2 * Math.PI * radius;
   const progress = focusDurationSec > 0 ? Math.max(0, Math.min(1, timeRemaining / focusDurationSec)) : 0;
 
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+
+    const applyNavBar = async (darken: boolean) => {
+      if (darken) {
+        await NavigationBar.setBackgroundColorAsync('#00000080');
+        await NavigationBar.setButtonStyleAsync('light');
+      } else {
+        const defaultColor = isDark ? '#000000' : '#ffffff';
+        await NavigationBar.setBackgroundColorAsync(defaultColor);
+        await NavigationBar.setButtonStyleAsync(isDark ? 'light' : 'dark');
+      }
+    };
+
+    applyNavBar(visible);
+
+    return () => {
+      applyNavBar(false);
+    };
+  }, [visible, isDark]);
+
   if (!visible) return null;
 
   return (
-    <View style={styles.overlay}>
-      <View style={styles.contentContainer}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      statusBarTranslucent
+      onRequestClose={onStop}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.contentContainer}>
         <TouchableOpacity 
           onPress={onToggleMute} 
           style={[styles.audioButton, { top: 60 + insets.top }]}
@@ -136,15 +165,16 @@ export default function FocusModeOverlay({
         </View>
       </View>
     </View>
+    </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
     alignItems: 'center',
-    zIndex: 10,
   },
   contentContainer: {
     backgroundColor: 'transparent',
