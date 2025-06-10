@@ -51,14 +51,23 @@ export default function FocusModeOverlay({
 
   useEffect(() => {
     if (Platform.OS !== 'android') return;
-    if (visible) {
-      NavigationBar.setBackgroundColorAsync('rgba(0,0,0,0.5)');
-      NavigationBar.setButtonStyleAsync('light');
-    } else {
-      const defaultColor = isDark ? '#000000' : '#ffffff';
-      NavigationBar.setBackgroundColorAsync(defaultColor);
-      NavigationBar.setButtonStyleAsync(isDark ? 'light' : 'dark');
-    }
+
+    const applyNavBar = async (darken: boolean) => {
+      if (darken) {
+        await NavigationBar.setBackgroundColorAsync('rgba(0,0,0,0.5)');
+        await NavigationBar.setButtonStyleAsync('light');
+      } else {
+        const defaultColor = isDark ? '#000000' : '#ffffff';
+        await NavigationBar.setBackgroundColorAsync(defaultColor);
+        await NavigationBar.setButtonStyleAsync(isDark ? 'light' : 'dark');
+      }
+    };
+
+    applyNavBar(visible);
+
+    return () => {
+      applyNavBar(false);
+    };
   }, [visible, isDark]);
 
   if (!visible) return null;
