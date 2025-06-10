@@ -49,9 +49,11 @@ export default function FocusModeOverlay({
   const progress = focusDurationSec > 0 ? Math.max(0, Math.min(1, timeRemaining / focusDurationSec)) : 0;
   
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const [shouldRender, setShouldRender] = React.useState(visible);
 
   useEffect(() => {
     if (visible) {
+      setShouldRender(true);
       Animated.timing(fadeAnim, {
         toValue: 1,
         duration: 200,
@@ -62,7 +64,11 @@ export default function FocusModeOverlay({
         toValue: 0,
         duration: 100,
         useNativeDriver: true,
-      }).start();
+      }).start(({ finished }) => {
+        if (finished) {
+          setShouldRender(false);
+        }
+      });
     }
   }, [visible, fadeAnim]);
 
@@ -73,7 +79,7 @@ export default function FocusModeOverlay({
     };
   }, [fadeAnim]);
 
-  if (!visible) return null;
+  if (!shouldRender) return null;
 
   return (
     <Animated.View 
