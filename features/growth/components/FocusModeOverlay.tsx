@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Platform, Modal } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
@@ -51,8 +51,15 @@ export default function FocusModeOverlay({
   if (!visible) return null;
 
   return (
-    <View style={styles.overlay}>
-      <View style={styles.contentContainer}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      statusBarTranslucent
+      onRequestClose={onStop}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.contentContainer}>
         <TouchableOpacity 
           onPress={onToggleMute} 
           style={[styles.audioButton, { top: 60 + insets.top }]}
@@ -136,15 +143,16 @@ export default function FocusModeOverlay({
         </View>
       </View>
     </View>
+    </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
     alignItems: 'center',
-    zIndex: 10,
   },
   contentContainer: {
     backgroundColor: 'transparent',
