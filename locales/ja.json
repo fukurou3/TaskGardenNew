@@ -149,7 +149,7 @@
     "create_new_folder": "フォルダーを作成",
     "no_notification": "通知なし",
     "photo_selected": "{{count}}枚選択中",
-    "no_notification_button": "通知なし",
+    "no_notification_button": "通知しない",
     "no_notification_display": "なし",
     "unselected_date_placeholder": "未選択",
     "unselected_time_placeholder": "未選択",
