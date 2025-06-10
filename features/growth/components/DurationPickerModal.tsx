@@ -94,6 +94,9 @@ export default function DurationPickerModal({
     } catch (error) {
       console.error('Failed to save duration:', error);
     }
+    // 変更が確実に親に反映されるよう、最新の値を通知
+    onChangeHours(internalHours);
+    onChangeMinutes(internalMinutes);
     onConfirm();
   };
 
