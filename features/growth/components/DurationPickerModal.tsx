@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, useWindowDimensions, Platform } from 'react-native';
 import WheelPicker from 'react-native-wheely';
 import { useTranslation } from 'react-i18next';
@@ -121,6 +121,7 @@ export default function DurationPickerModal({
             <View style={styles.pickerGroup}>
               <View style={styles.pickerContainer}>
                 <WheelPicker
+                  key={`hours-${internalHours}`}
                   options={HOURS_OPTIONS}
                   selectedIndex={internalHours}
                   onChange={handleHoursChange}
@@ -152,6 +153,7 @@ export default function DurationPickerModal({
             <View style={styles.pickerGroup}>
               <View style={styles.pickerContainer}>
                 <WheelPicker
+                  key={`minutes-${internalMinutes}`}
                   options={MINUTE_SECOND_OPTIONS}
                   selectedIndex={internalMinutes}
                   onChange={handleMinutesChange}
