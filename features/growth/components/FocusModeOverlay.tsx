@@ -48,22 +48,15 @@ export default function FocusModeOverlay({
   const circumference = 2 * Math.PI * radius;
   const progress = focusDurationSec > 0 ? Math.max(0, Math.min(1, timeRemaining / focusDurationSec)) : 0;
   
-  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const fadeAnim = useRef(new Animated.Value(visible ? 1 : 0)).current;
 
   useEffect(() => {
-    if (visible) {
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 200,
-        useNativeDriver: true,
-      }).start();
-    } else {
-      Animated.timing(fadeAnim, {
-        toValue: 0,
-        duration: 100,
-        useNativeDriver: true,
-      }).start();
-    }
+    fadeAnim.stopAnimation();
+    Animated.timing(fadeAnim, {
+      toValue: visible ? 1 : 0,
+      duration: visible ? 200 : 100,
+      useNativeDriver: true,
+    }).start();
   }, [visible, fadeAnim]);
 
   // コンポーネントのマウント解除時にアニメーションをクリーンアップ
@@ -73,16 +66,15 @@ export default function FocusModeOverlay({
     };
   }, [fadeAnim]);
 
-  if (!visible) return null;
-
   return (
-    <Animated.View 
+    <Animated.View
       style={[
         styles.overlay,
         {
           opacity: fadeAnim,
         }
       ]}
+      pointerEvents={visible ? 'auto' : 'none'}
     >
       <View style={styles.contentContainer}>
         <TouchableOpacity 
