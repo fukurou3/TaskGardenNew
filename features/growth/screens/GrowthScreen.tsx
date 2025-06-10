@@ -190,19 +190,16 @@ export default function GrowthScreen() {
       return;
     }
     
-    // 時間を更新
+    // 修正: 時間設定をstateに保存してからタイマーを開始
     setFocusDurationSec(totalSec);
-    setTimeRemaining(totalSec);
     
-    // タイマー画面へ遷移してタイマーを開始
-    setViewMode('timer');
-    
-    // タイマー開始処理
+    // タイマー開始の処理
     startTimeRef.current = Date.now();
     if (notificationIdRef.current) {
       Notifications.cancelScheduledNotificationAsync(notificationIdRef.current).catch(() => {});
       notificationIdRef.current = null;
     }
+    
     Notifications.scheduleNotificationAsync({
       content: {
         title: t('growth.focus_mode_completed_title'),
@@ -211,12 +208,14 @@ export default function GrowthScreen() {
         }),
       },
       trigger: { seconds: totalSec, repeats: false },
-    }).then((id) => { notificationIdRef.current = id; });
+    }).then((id) => { 
+      notificationIdRef.current = id; 
+    });
     
-    // 最後にタイマーを開始（状態更新後に実行）
-    setTimeout(() => {
-      setFocusModeStatus('running');
-    }, 100);
+    // 修正: 全て同時に設定
+    setTimeRemaining(totalSec);
+    setViewMode('timer');
+    setFocusModeStatus('running');
   }, [tempHours, tempMinutes, tempSeconds, t]);
 
   const pauseFocusMode = useCallback(() => {
@@ -273,7 +272,7 @@ export default function GrowthScreen() {
       notificationIdRef.current = null;
     }
     
-    // 現在の残り時間（または初期時間）からピッカーの値を設定
+    // 修正: 現在の残り時間をピッカーに反映
     const targetTime = timeRemaining > 0 ? timeRemaining : focusDurationSec;
     const hours = Math.floor(targetTime / 3600);
     const minutes = Math.floor((targetTime % 3600) / 60);
@@ -300,17 +299,18 @@ export default function GrowthScreen() {
       notificationIdRef.current = null;
     }
     
-    // 初期値に戻す
+    // 修正: 初期値に戻すのではなく、設定された時間に戻す
+    setFocusModeStatus('idle');
+    setViewMode('normal');
+    setTimeRemaining(focusDurationSec);
+    
+    // ピッカーの値も初期値に戻す
     const hours = Math.floor(focusDurationSec / 3600);
     const minutes = Math.floor((focusDurationSec % 3600) / 60);
     const seconds = focusDurationSec % 60;
     setTempHours(hours);
     setTempMinutes(minutes);
     setTempSeconds(seconds);
-    
-    setFocusModeStatus('idle');
-    setViewMode('normal');
-    setTimeRemaining(focusDurationSec);
   }, [focusDurationSec]);
 
   const formatTime = (totalSeconds: number) => {
