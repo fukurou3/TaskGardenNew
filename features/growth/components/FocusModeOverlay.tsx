@@ -1,5 +1,5 @@
-import React, { useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Animated, Platform, Dimensions } from 'react-native';
+import React from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
@@ -47,43 +47,11 @@ export default function FocusModeOverlay({
   const radius = (size / 2) - (strokeWidth / 2);
   const circumference = 2 * Math.PI * radius;
   const progress = focusDurationSec > 0 ? Math.max(0, Math.min(1, timeRemaining / focusDurationSec)) : 0;
-  
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    if (visible) {
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 200,
-        useNativeDriver: true,
-      }).start();
-    } else {
-      Animated.timing(fadeAnim, {
-        toValue: 0,
-        duration: 100,
-        useNativeDriver: true,
-      }).start();
-    }
-  }, [visible, fadeAnim]);
-
-  // コンポーネントのマウント解除時にアニメーションをクリーンアップ
-  useEffect(() => {
-    return () => {
-      fadeAnim.stopAnimation();
-    };
-  }, [fadeAnim]);
 
   if (!visible) return null;
 
   return (
-    <Animated.View 
-      style={[
-        styles.overlay,
-        {
-          opacity: fadeAnim,
-        }
-      ]}
-    >
+    <View style={styles.overlay}>
       <View style={styles.contentContainer}>
         <TouchableOpacity 
           onPress={onToggleMute} 
@@ -167,7 +135,7 @@ export default function FocusModeOverlay({
           </View>
         </View>
       </View>
-    </Animated.View>
+    </View>
   );
 }
 
