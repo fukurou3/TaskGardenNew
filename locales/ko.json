@@ -8,7 +8,12 @@
     "edit": "편집",
     "share": "공유",
     "delete_confirm_title": "삭제 확인",
-    "delete_confirm": "이 작업을 삭제하시겠습니까?"
+    "delete_confirm": "이 작업을 삭제하시겠습니까?",
+    "mark_as_done": "완료로 표시",
+    "mark_as_not_done": "미완료로 표시",
+    "delete": "삭제",
+    "toggle_error_message": "작업 상태를 변경할 수 없었습니다. 다시 시도해 주세요.",
+    "delete_error_message": "작업을 삭제할 수 없었습니다. 다시 시도해 주세요."
   },
   "settings": {
     "title": "설정",

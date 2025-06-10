@@ -113,7 +113,6 @@ export const useTasksScreenLogic = () => {
           setLoading(true);
         }
         try {
-          await TasksDatabase.initialize();
           const [taskRows, rawOrderData] = await Promise.all([
             TasksDatabase.getAllTasks(),
             getItem(FOLDER_ORDER_KEY),
@@ -189,7 +188,6 @@ export const useTasksScreenLogic = () => {
 
   const syncTasksToDatabase = async (prevTasks: Task[], newTasks: Task[]) => {
     try {
-      await TasksDatabase.initialize();
       const prevIds = new Set(prevTasks.map(t => t.id));
       const newIds = new Set(newTasks.map(t => t.id));
       for (const task of newTasks) {

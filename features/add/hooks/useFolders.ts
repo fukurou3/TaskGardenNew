@@ -7,7 +7,6 @@ export const useFolders = (trigger?: unknown): string[] => {
 
   useEffect(() => {
     const load = async () => {
-      await TasksDatabase.initialize();
       const raw = await TasksDatabase.getAllTasks();
       const tasks: Task[] = raw.map(r => JSON.parse(r) as Task);
       const unique = Array.from(

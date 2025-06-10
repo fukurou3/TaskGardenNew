@@ -177,35 +177,15 @@ export default function SettingsScreen() {
 
         <View style={styles.card}>
           <Text style={styles.label}>{t('settings.calendar_background')}</Text>
-          <View style={styles.thumbnailContainer}>
-            {BACKGROUND_IMAGES.map((img) => (
-              <TouchableOpacity
-                key={img.id}
-                onPress={async () => {
-                  setSelectedBgId(img.id);
-                  await setItem(CALENDAR_BG_KEY, img.id);
-                }}
-              >
-                {img.source ? (
-                  <Image
-                    source={img.source}
-                    style={[
-                      styles.thumbnail,
-                      selectedBgId === img.id && styles.thumbnailSelected,
-                    ]}
-                  />
-                ) : (
-                  <View style={[
-                    styles.thumbnail,
-                    styles.noImageThumbnail,
-                    selectedBgId === img.id && styles.thumbnailSelected,
-                  ]}>
-                    <Ionicons name="close-circle" size={24} color={isDark ? '#888' : '#aaa'} />
-                  </View>
-                )}
-              </TouchableOpacity>
-            ))}
-          </View>
+          <TouchableOpacity
+            style={styles.optionRowButton}
+            onPress={() => router.push('/settings/calendar-background')}
+          >
+            <Text style={styles.optionLabel}>
+              {t('settings.select_calendar_background')}
+            </Text>
+            <Ionicons name="chevron-forward" size={fontSizes[fontSizeKey] + 2} color={isDark ? '#A0A0A0' : '#888'} />
+          </TouchableOpacity>
         </View>
 
         <View style={styles.card}>

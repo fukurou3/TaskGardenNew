@@ -177,8 +177,15 @@ export default function RepeatingTasksScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.appBar}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color={subColor} />
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.replace('/(tabs)/settings')}
+          >
+            <Ionicons
+              name="chevron-back"
+              size={24}
+              color={isDark ? '#EFEFF0' : '#1C1C1E'}
+            />
           </TouchableOpacity>
           <Text style={styles.appBarTitle}>{t('settings.repeating_tasks_title')}</Text>
           <View style={styles.appBarActionPlaceholder} />
@@ -191,9 +198,16 @@ export default function RepeatingTasksScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.appBar}>
-         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color={subColor} />
-          </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => router.replace('/(tabs)/settings')}
+        >
+          <Ionicons
+            name="chevron-back"
+            size={24}
+            color={isDark ? '#EFEFF0' : '#1C1C1E'}
+          />
+        </TouchableOpacity>
         <Text style={styles.appBarTitle}>{t('settings.repeating_tasks_title')}</Text>
         <View style={styles.appBarActionPlaceholder} />
       </View>
@@ -205,6 +219,7 @@ export default function RepeatingTasksScreen() {
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.scrollContent}>
+          <View style={styles.card}>
           {repeatingTasks.map((task) => (
             <View key={task.id} style={styles.taskItemOuter}>
                 <TouchableOpacity
@@ -240,6 +255,7 @@ export default function RepeatingTasksScreen() {
                 </View>
             </View>
           ))}
+          </View>
         </ScrollView>
       )}
 
@@ -271,31 +287,28 @@ export default function RepeatingTasksScreen() {
 const createRepeatingTasksStyles = (isDark: boolean, subColor: string, fsKey: FontSizeKey) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: isDark ? '#000000' : '#F2F2F7',
+    backgroundColor: isDark ? '#0C0C0C' : '#f2f2f4',
   },
   appBar: {
-    height: Platform.OS === 'ios' ? 44 : 56,
+    height: 56,
+    paddingHorizontal: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 8,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.2)',
-    backgroundColor: isDark ? '#1C1C1E' : '#F9F9F9',
+    borderBottomColor: isDark ? '#3A3A3C' : '#C6C6C8',
   },
   backButton: {
     padding: 8,
-    marginRight: 8,
+    marginLeft: -8,
   },
   appBarTitle: {
-    fontSize: appFontSizes[fsKey] + (Platform.OS === 'ios' ? 1 : 0),
-    fontWeight: Platform.OS === 'ios' ? '600' : '500',
-    color: isDark ? '#FFFFFF' : '#000000',
-    textAlign: 'center',
-    flex: 1,
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: isDark ? '#EFEFF0' : '#1C1C1E',
   },
   appBarActionPlaceholder: {
-    width: (Platform.OS === 'ios' ? 32 : 24) + 8,
+    width: 40,
   },
   loader: {
     flex: 1,
@@ -316,17 +329,19 @@ const createRepeatingTasksStyles = (isDark: boolean, subColor: string, fsKey: Fo
     lineHeight: appFontSizes[fsKey] * 1.4,
   },
   scrollContent: {
-    paddingTop: 8,
-    paddingBottom: 20,
+    padding: 16,
+  },
+  card: {
+    backgroundColor: isDark ? '#1f1f21' : '#FFFFFF',
+    borderRadius: Platform.OS === 'ios' ? 10 : 8,
+    padding: 16,
   },
   taskItemOuter: {
-    backgroundColor: isDark ? '#1C1C1E' : '#FFFFFF',
-    marginVertical: 0,
     flexDirection: 'row',
     alignItems: 'center',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.12)',
-    paddingLeft: 16,
+    paddingVertical: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderColor: isDark ? '#3A3A3C' : '#E0E0E0',
   },
   taskItemTouchable: {
     flex: 1,

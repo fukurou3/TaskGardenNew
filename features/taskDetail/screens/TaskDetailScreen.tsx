@@ -11,6 +11,7 @@ import {
   BackHandler,
   useWindowDimensions,
   Platform,
+  Alert,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -79,11 +80,15 @@ export default function TaskDetailScreen() {
 
   const confirmDelete = async () => {
     try {
-      await TasksDatabase.initialize();
       await TasksDatabase.deleteTask(id as string);
       router.replace('/(tabs)/tasks');
     } catch (error) {
       console.error('Failed to delete task', error);
+      Alert.alert(
+        t('common.error'),
+        t('task_detail.delete_error_message'),
+        [{ text: t('common.ok') }]
+      );
     } finally {
       setIsDeleteConfirmVisible(false);
     }
@@ -110,11 +115,15 @@ export default function TaskDetailScreen() {
       } else {
         updated = { ...task, completedAt: task.completedAt ? undefined : dayjs.utc().toISOString() } as Task;
       }
-      await TasksDatabase.initialize();
       await TasksDatabase.saveTask(updated as any);
       setTask(updated);
     } catch (e) {
       console.error('toggle done error', e);
+      Alert.alert(
+        t('common.error'),
+        t('task_detail.toggle_error_message'),
+        [{ text: t('common.ok') }]
+      );
     }
   };
 

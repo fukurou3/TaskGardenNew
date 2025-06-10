@@ -8,7 +8,12 @@
     "edit": "Edit",
     "share": "Share",
     "delete_confirm_title": "Confirm Deletion",
-    "delete_confirm": "Are you sure you want to delete this task?"
+    "delete_confirm": "Are you sure you want to delete this task?",
+    "mark_as_done": "Mark as Done",
+    "mark_as_not_done": "Mark as Not Done",
+    "delete": "Delete",
+    "toggle_error_message": "Failed to update task status. Please try again.",
+    "delete_error_message": "Failed to delete task. Please try again."
   },
   "settings": {
     "title": "Settings",

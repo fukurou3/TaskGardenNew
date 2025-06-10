@@ -9,6 +9,7 @@ import React, { useEffect, useState } from 'react';
 import 'react-native-reanimated';
 import i18n, { initI18n } from '@/lib/i18n';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import TasksDatabase from '@/lib/TaskDatabase';
 
 import { ThemeProvider, useAppTheme } from '@/hooks/ThemeContext';
 import { FontSizeProvider } from '@/context/FontSizeContext';
@@ -54,7 +55,14 @@ export default function RootLayout() {
   const [i18nReady, setI18nReady] = useState(false);
 
   useEffect(() => {
-    initI18n().then(() => setI18nReady(true));
+    const initializeApp = async () => {
+      await Promise.all([
+        initI18n(),
+        TasksDatabase.initialize()
+      ]);
+      setI18nReady(true);
+    };
+    initializeApp();
   }, []);
 
   useEffect(() => {

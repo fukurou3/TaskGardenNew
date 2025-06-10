@@ -121,7 +121,6 @@ export const useSaveTask = ({
     };
 
     try {
-      await TasksDatabase.initialize();
       await TasksDatabase.saveTask(newTask as any);
       Toast.show({ type: 'success', text1: t('add_task.task_added_successfully', 'タスクを追加しました') });
       clearForm();

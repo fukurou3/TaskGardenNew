@@ -11,7 +11,9 @@
     "delete_confirm": "このタスクを削除しますか？",
     "mark_as_done": "完了にする",
     "mark_as_not_done": "未完了にする",
-    "delete": "削除"
+    "delete": "削除",
+    "toggle_error_message": "タスクの完了状態を変更できませんでした。もう一度お試しください。",
+    "delete_error_message": "タスクを削除できませんでした。もう一度お試しください。"
   },
   "settings": {
     "title": "設定",

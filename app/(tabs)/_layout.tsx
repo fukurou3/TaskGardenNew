@@ -122,6 +122,7 @@ function InnerTabs() {
             'growth/dictionary',
             'index',
             'two',
+            'settings/calendar-background',
           ].map((name) => (
             <Tabs.Screen key={name} name={name} options={{ href: null }} />
           ))}

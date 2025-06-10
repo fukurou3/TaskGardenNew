@@ -85,7 +85,7 @@ export default function TimerSoundScreen() {
       <View style={styles.appBar}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => router.back()}
+          onPress={() => router.replace('/(tabs)/settings')}
         >
           <Ionicons
             name="chevron-back"

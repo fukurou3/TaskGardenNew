@@ -20,7 +20,7 @@ export default function GoogleSyncSettingsScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.appBar}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+        <TouchableOpacity onPress={() => router.replace('/(tabs)/settings')} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color={subColor} />
         </TouchableOpacity>
         <Text style={styles.appBarTitle}>{t('settings.google_calendar_integration')}</Text>
