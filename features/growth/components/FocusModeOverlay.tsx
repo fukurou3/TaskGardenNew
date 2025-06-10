@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform, Modal } from 'react-native';
+import * as NavigationBar from 'expo-navigation-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
@@ -47,6 +48,18 @@ export default function FocusModeOverlay({
   const radius = (size / 2) - (strokeWidth / 2);
   const circumference = 2 * Math.PI * radius;
   const progress = focusDurationSec > 0 ? Math.max(0, Math.min(1, timeRemaining / focusDurationSec)) : 0;
+
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    if (visible) {
+      NavigationBar.setBackgroundColorAsync('rgba(0,0,0,0.5)');
+      NavigationBar.setButtonStyleAsync('light');
+    } else {
+      const defaultColor = isDark ? '#000000' : '#ffffff';
+      NavigationBar.setBackgroundColorAsync(defaultColor);
+      NavigationBar.setButtonStyleAsync(isDark ? 'light' : 'dark');
+    }
+  }, [visible, isDark]);
 
   if (!visible) return null;
 
