@@ -48,38 +48,15 @@ export default function FocusModeOverlay({
   const circumference = 2 * Math.PI * radius;
   const progress = focusDurationSec > 0 ? Math.max(0, Math.min(1, timeRemaining / focusDurationSec)) : 0;
   
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const [shouldRender, setShouldRender] = React.useState(visible);
-  const latestVisible = useRef(visible);
-
-  // visibleの最新値を保持
-  useEffect(() => {
-    latestVisible.current = visible;
-  }, [visible]);
+  const fadeAnim = useRef(new Animated.Value(visible ? 1 : 0)).current;
 
   useEffect(() => {
-    // 進行中のアニメーションを停止
     fadeAnim.stopAnimation();
-
-    if (visible) {
-      setShouldRender(true);
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 200,
-        useNativeDriver: true,
-      }).start();
-    } else {
-      Animated.timing(fadeAnim, {
-        toValue: 0,
-        duration: 100,
-        useNativeDriver: true,
-      }).start(({ finished }) => {
-        // フェードアウト中にvisibleがtrueに戻っていないか確認
-        if (finished && !latestVisible.current) {
-          setShouldRender(false);
-        }
-      });
-    }
+    Animated.timing(fadeAnim, {
+      toValue: visible ? 1 : 0,
+      duration: visible ? 200 : 100,
+      useNativeDriver: true,
+    }).start();
   }, [visible, fadeAnim]);
 
   // コンポーネントのマウント解除時にアニメーションをクリーンアップ
@@ -89,16 +66,15 @@ export default function FocusModeOverlay({
     };
   }, [fadeAnim]);
 
-  if (!shouldRender) return null;
-
   return (
-    <Animated.View 
+    <Animated.View
       style={[
         styles.overlay,
         {
           opacity: fadeAnim,
         }
       ]}
+      pointerEvents={visible ? 'auto' : 'none'}
     >
       <View style={styles.contentContainer}>
         <TouchableOpacity 
