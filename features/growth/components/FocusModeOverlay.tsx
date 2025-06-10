@@ -50,8 +50,17 @@ export default function FocusModeOverlay({
   
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const [shouldRender, setShouldRender] = React.useState(visible);
+  const latestVisible = useRef(visible);
+
+  // visibleの最新値を保持
+  useEffect(() => {
+    latestVisible.current = visible;
+  }, [visible]);
 
   useEffect(() => {
+    // 進行中のアニメーションを停止
+    fadeAnim.stopAnimation();
+
     if (visible) {
       setShouldRender(true);
       Animated.timing(fadeAnim, {
@@ -65,7 +74,8 @@ export default function FocusModeOverlay({
         duration: 100,
         useNativeDriver: true,
       }).start(({ finished }) => {
-        if (finished) {
+        // フェードアウト中にvisibleがtrueに戻っていないか確認
+        if (finished && !latestVisible.current) {
           setShouldRender(false);
         }
       });
