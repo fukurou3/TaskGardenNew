@@ -1,7 +1,9 @@
-import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Pressable, useWindowDimensions, Animated } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { View, Text, StyleSheet, Pressable, useWindowDimensions, Platform } from 'react-native';
+import Modal from 'react-native-modal';
 import WheelPicker from 'react-native-wheely';
 import { useTranslation } from 'react-i18next';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface Props {
   visible: boolean;
@@ -19,6 +21,8 @@ interface Props {
 const HOURS_OPTIONS = Array.from({ length: 24 }, (_, i) => `${i}`);
 const MINUTE_SECOND_OPTIONS = Array.from({ length: 60 }, (_, i) => `${i}`);
 
+const STORAGE_KEY = '@growth_duration_picker';
+
 export default function DurationPickerModal({
   visible,
   hours,
@@ -35,158 +39,199 @@ export default function DurationPickerModal({
   const { width } = useWindowDimensions();
   const pickerWidth = 90;
   
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    if (visible) {
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 200,
-        useNativeDriver: true,
-      }).start();
-    } else {
-      Animated.timing(fadeAnim, {
-        toValue: 0,
-        duration: 100,
-        useNativeDriver: true,
-      }).start();
-    }
-  }, [visible, fadeAnim]);
-
-  if (!visible) return null;
+  const [internalHours, setInternalHours] = useState(1);
+  const [internalMinutes, setInternalMinutes] = useState(0);
   
-  return (
-    <Animated.View style={[
-      styles.contentContainer, 
-      { 
-        opacity: fadeAnim,
+  // 保存された値を読み込み
+  useEffect(() => {
+    const loadSavedDuration = async () => {
+      try {
+        const saved = await AsyncStorage.getItem(STORAGE_KEY);
+        if (saved) {
+          const { hours: savedHours, minutes: savedMinutes } = JSON.parse(saved);
+          setInternalHours(savedHours);
+          setInternalMinutes(savedMinutes);
+          onChangeHours(savedHours);
+          onChangeMinutes(savedMinutes);
+        } else {
+          // 初期値: 1時間
+          setInternalHours(1);
+          setInternalMinutes(0);
+          onChangeHours(1);
+          onChangeMinutes(0);
+        }
+      } catch (error) {
+        console.error('Failed to load saved duration:', error);
+        // エラー時は初期値: 1時間
+        setInternalHours(1);
+        setInternalMinutes(0);
+        onChangeHours(1);
+        onChangeMinutes(0);
       }
-    ]}>
-      <Pressable style={styles.overlayTouchable}>
-        <View style={styles.container}>
+    };
+    
+    if (visible) {
+      loadSavedDuration();
+    }
+  }, [visible]);
+  
+  // 値変更時の処理
+  const handleHoursChange = (val: number) => {
+    setInternalHours(val);
+    onChangeHours(val);
+  };
+  
+  const handleMinutesChange = (val: number) => {
+    setInternalMinutes(val);
+    onChangeMinutes(val);
+  };
+  
+  // 確定時に値を保存
+  const handleConfirm = async () => {
+    try {
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({
+        hours: internalHours,
+        minutes: internalMinutes
+      }));
+    } catch (error) {
+      console.error('Failed to save duration:', error);
+    }
+    onConfirm();
+  };
+
+  return (
+    <Modal
+      isVisible={visible}
+      animationIn="fadeIn"
+      animationOut="fadeOut"
+      style={styles.modal}
+      backdropOpacity={0}
+      animationInTiming={300}
+      animationOutTiming={300}
+      hideModalContentWhileAnimating
+      useNativeDriver={Platform.OS === 'android'}
+      useNativeDriverForBackdrop
+      onBackdropPress={onClose}
+      onBackButtonPress={() => { onClose(); return true; }}
+    >
+      <View style={styles.container}>
         <View style={styles.row}>
-          <View style={styles.pickerContainer}>
-            <WheelPicker
-              options={HOURS_OPTIONS}
-              selectedIndex={hours}
-              onChange={onChangeHours}
-              itemHeight={60}
-              visibleRest={2}
-              containerStyle={{ 
-                backgroundColor: 'transparent',
-                width: pickerWidth,
-              }}
-              itemTextStyle={{ 
-                color: textColor, 
-                fontSize: 48, 
-                fontWeight: '300',
-                letterSpacing: 1.5,
-                fontFamily: 'System',
-              }}
-              selectedIndicatorStyle={{
-                backgroundColor: 'transparent',
-              }}
-              decelerationRate="normal"
-              snapToAlignment="center"
-              scrollEventThrottle={1}
-              showsVerticalScrollIndicator={false}
-              bounces={true}
-              bouncesZoom={false}
-            />
+          <View style={styles.pickerGroup}>
+            <View style={styles.pickerContainer}>
+              <WheelPicker
+                options={HOURS_OPTIONS}
+                selectedIndex={internalHours}
+                onChange={handleHoursChange}
+                itemHeight={60}
+                visibleRest={1}
+                containerStyle={{ 
+                  backgroundColor: 'transparent',
+                  width: pickerWidth,
+                }}
+                itemTextStyle={{ 
+                  color: textColor, 
+                  fontSize: 48, 
+                  fontWeight: '300',
+                  letterSpacing: 1.5,
+                  fontFamily: 'System',
+                }}
+                selectedIndicatorStyle={{
+                  backgroundColor: 'transparent',
+                }}
+                decelerationRate="fast"
+                snapToAlignment="center"
+                scrollEventThrottle={16}
+                showsVerticalScrollIndicator={false}
+                bounces={true}
+                bouncesZoom={false}
+              />
+              <Text style={[styles.overlayLabel, { color: textColor }]}>{t('common.hours_label')}</Text>
+            </View>
           </View>
-          <Text style={[styles.labelSmall, { color: textColor }]}>{t('common.hours_label')}</Text>
-          <View style={styles.spacerLarge} />
-          <View style={styles.pickerContainer}>
-            <WheelPicker
-              options={MINUTE_SECOND_OPTIONS}
-              selectedIndex={minutes}
-              onChange={onChangeMinutes}
-              itemHeight={60}
-              visibleRest={2}
-              containerStyle={{ 
-                backgroundColor: 'transparent',
-                width: pickerWidth,
-              }}
-              itemTextStyle={{ 
-                color: textColor, 
-                fontSize: 48, 
-                fontWeight: '300',
-                letterSpacing: 1.5,
-                fontFamily: 'System',
-              }}
-              selectedIndicatorStyle={{
-                backgroundColor: 'transparent',
-              }}
-              decelerationRate="normal"
-              snapToAlignment="center"
-              scrollEventThrottle={1}
-              showsVerticalScrollIndicator={false}
-              bounces={true}
-              bouncesZoom={false}
-            />
+          <View style={styles.pickerGroup}>
+            <View style={styles.pickerContainer}>
+              <WheelPicker
+                options={MINUTE_SECOND_OPTIONS}
+                selectedIndex={internalMinutes}
+                onChange={handleMinutesChange}
+                itemHeight={60}
+                visibleRest={1}
+                containerStyle={{ 
+                  backgroundColor: 'transparent',
+                  width: pickerWidth,
+                }}
+                itemTextStyle={{ 
+                  color: textColor, 
+                  fontSize: 48, 
+                  fontWeight: '300',
+                  letterSpacing: 1.5,
+                  fontFamily: 'System',
+                }}
+                selectedIndicatorStyle={{
+                  backgroundColor: 'transparent',
+                }}
+                decelerationRate="fast"
+                snapToAlignment="center"
+                scrollEventThrottle={16}
+                showsVerticalScrollIndicator={false}
+                bounces={true}
+                bouncesZoom={false}
+              />
+              <Text style={[styles.overlayLabel, { color: textColor }]}>{t('common.minutes_label')}</Text>
+            </View>
           </View>
-          <Text style={[styles.labelSmall, { color: textColor }]}>{t('common.minutes_label')}</Text>
         </View>
         <View style={styles.buttonRow}>
           <Pressable style={styles.cancelButton} onPress={onClose}>
             <Text style={[styles.cancelButtonText, { color: textColor }]}>終了</Text>
           </Pressable>
-          <Pressable style={styles.startButton} onPress={onConfirm}>
+          <Pressable style={styles.startButton} onPress={handleConfirm}>
             <Text style={[styles.startButtonText, { color: textColor }]}>開始</Text>
           </Pressable>
         </View>
-        </View>
-      </Pressable>
-    </Animated.View>
+      </View>
+    </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  contentContainer: { 
-    ...StyleSheet.absoluteFillObject, 
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    zIndex: 10,
-  },
-  overlayTouchable: {
-    flex: 1,
+  modal: {
     justifyContent: 'center',
     alignItems: 'center',
-    width: '100%',
+    margin: 0,
   },
   container: { 
-    padding: 40,
+    backgroundColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    marginLeft: -30,
   },
   row: { 
     flexDirection: 'row', 
     alignItems: 'center', 
-    justifyContent: 'space-evenly', 
-    marginVertical: 20,
-    width: '100%',
-    paddingHorizontal: 20,
+    justifyContent: 'center',
+    gap: 60,
   },
   pickerGroup: {
     alignItems: 'center',
     justifyContent: 'center',
-    flex: 1,
   },
-  labelSmall: { 
-    marginBottom: 16,
-    fontSize: 24, 
-    fontWeight: '400',
-    letterSpacing: 0.8,
-    opacity: 0.9,
+  overlayLabel: { 
+    position: 'absolute',
+    right: -30,
+    top: '50%',
+    marginTop: -12,
+    fontSize: 20, 
+    fontWeight: '300',
+    letterSpacing: 0.5,
+    opacity: 0.8,
     fontFamily: 'System',
-    textAlign: 'center',
   },
   pickerContainer: {
-    paddingVertical: 40,
-    paddingHorizontal: 30,
-    minHeight: 260,
-    minWidth: 140,
-    justifyContent: 'center',
     alignItems: 'center',
-    flex: 1,
+    justifyContent: 'center',
+    position: 'relative',
   },
   buttonRow: { 
     flexDirection: 'row', 

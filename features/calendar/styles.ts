@@ -1,10 +1,11 @@
 // app/(tabs)/calendar/styles.ts
 import { StyleSheet, ViewStyle, TextStyle } from 'react-native';
+import { fontSizes as appFontSizes } from '@/constants/fontSizes';
 
 export type CalendarScreenStyles = {
   container: ViewStyle;
   appBar: ViewStyle;
-  titleText: TextStyle;
+  title: TextStyle;
   monthHeader: ViewStyle;
   monthText: TextStyle;
   todayButton: ViewStyle;
@@ -24,6 +25,7 @@ export type CalendarScreenStyles = {
 };
 
 export const createCalendarStyles = (isDark: boolean, subColor: string): CalendarScreenStyles => {
+  const baseFontSize = appFontSizes["normal"];
   // --- 変更点：基本色を定義 ---
   const backgroundColor = isDark ? '#0C0C0C' : '#f2f2f4'; // 真っ黒・真っ白から変更
   const textColor = isDark ? '#EAEAEA' : '#333333';
@@ -53,10 +55,10 @@ export const createCalendarStyles = (isDark: boolean, subColor: string): Calenda
         backgroundColor: backgroundColor, // 変更
         borderBottomWidth: 0, // 境界線を削除
     },
-    titleText: {
-        fontSize: 18, // 少し小さくして上品に
-        fontWeight: '600', // boldから少し細く
-        color: textColor,
+    title: {
+        fontSize: baseFontSize + 3,
+        fontWeight: '600',
+        color: isDark ? '#FFFFFF' : '#000000',
     },
     monthHeader: {
         flexDirection: 'row',
@@ -64,7 +66,7 @@ export const createCalendarStyles = (isDark: boolean, subColor: string): Calenda
         alignItems: 'center',
         paddingHorizontal: 16, // 余白を広げる
         paddingVertical: 12,
-        backgroundColor: backgroundColor, // 変更
+        backgroundColor: cardBackgroundColor, // カレンダーと同じ背景色
     },
     monthText: {
         fontSize: 24, // 月の表示は大きく

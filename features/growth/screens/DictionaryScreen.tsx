@@ -6,6 +6,8 @@ import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useGrowth } from '../hooks/useGrowth';
+import PickupSlideshow from '../components/PickupSlideshow';
+import CurrencyOverlay from '../components/CurrencyHeader';
 
 export default function DictionaryScreen() {
   const { colorScheme } = useAppTheme();
@@ -37,6 +39,8 @@ export default function DictionaryScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#1a1a1a' : '#f5f5f5' }]}>
+      <CurrencyOverlay />
+      
       <View style={styles.header}>
         <Text style={[styles.title, { color: isDark ? '#fff' : '#000' }]}>世界図鑑 (World Dex)</Text>
         <View style={styles.actionButtons}>
@@ -58,6 +62,8 @@ export default function DictionaryScreen() {
       </View>
 
       <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
+        <PickupSlideshow />
+        
         <Text style={[styles.sectionTitle, { color: isDark ? '#ccc' : '#666' }]}>コレクション</Text>
         
         <View style={styles.themeGrid}>
@@ -73,13 +79,14 @@ export default function DictionaryScreen() {
                   styles.themeCard,
                   { 
                     backgroundColor: isDark ? '#2a2a2a' : '#fff',
-                    borderColor: isSelected ? '#4CAF50' : (isDark ? '#444' : '#ddd'),
-                    borderWidth: isSelected ? 2 : 1,
-                    opacity: isUnlocked ? 1 : 0.5
+                    borderColor: isSelected ? '#4CAF50' : 'transparent',
+                    borderWidth: isSelected ? 2 : 0,
+                    opacity: isUnlocked ? 1 : 0.6
                   }
                 ]}
                 onPress={() => isUnlocked && changeSelectedTheme(theme.id)}
                 disabled={!isUnlocked}
+                activeOpacity={0.8}
               >
                 <View style={styles.themeImageContainer}>
                   {isUnlocked ? (
@@ -90,28 +97,32 @@ export default function DictionaryScreen() {
                     />
                   ) : (
                     <View style={[styles.lockedTheme, { backgroundColor: isDark ? '#333' : '#f0f0f0' }]}>
-                      <Ionicons name="lock-closed" size={24} color={isDark ? '#666' : '#999'} />
+                      <Ionicons name="lock-closed" size={28} color={isDark ? '#666' : '#999'} />
+                    </View>
+                  )}
+                  {isSelected && (
+                    <View style={styles.selectedOverlay}>
+                      <View style={styles.selectedBadgeTop}>
+                        <Ionicons name="checkmark-circle" size={20} color="#fff" />
+                      </View>
                     </View>
                   )}
                 </View>
                 
                 <View style={styles.themeInfo}>
-                  <Text style={[styles.themeName, { color: isDark ? '#fff' : '#000' }]}>
+                  <Text style={[styles.themeName, { color: isDark ? '#fff' : '#000' }]} numberOfLines={1}>
                     {isUnlocked ? theme.name : '???'}
                   </Text>
                   {isUnlocked && progress && (
                     <View style={styles.progressInfo}>
-                      <Text style={[styles.stageText, { color: isDark ? '#ccc' : '#666' }]}>
+                      <Text style={[styles.stageText, { color: isDark ? '#aaa' : '#777' }]} numberOfLines={1}>
                         {t(`growth.stage_${progress.currentGrowthStage}`)}
                       </Text>
-                      <Text style={[styles.pointsText, { color: isDark ? '#aaa' : '#888' }]}>
-                        {progress.totalGrowthPoints} pts
-                      </Text>
-                    </View>
-                  )}
-                  {isSelected && (
-                    <View style={styles.selectedBadge}>
-                      <Text style={styles.selectedText}>選択中</Text>
+                      <View style={styles.pointsBadge}>
+                        <Text style={[styles.pointsText, { color: isDark ? '#4CAF50' : '#2E7D32' }]}>
+                          {progress.totalGrowthPoints}
+                        </Text>
+                      </View>
                     </View>
                   )}
                 </View>
@@ -168,22 +179,23 @@ const styles = StyleSheet.create({
   themeGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 15,
+    gap: 12,
     justifyContent: 'space-between',
   },
   themeCard: {
     width: '47%',
-    borderRadius: 12,
+    borderRadius: 16,
     overflow: 'hidden',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 6,
+    marginBottom: 8,
   },
   themeImageContainer: {
     width: '100%',
-    height: 120,
+    height: 140,
     position: 'relative',
   },
   themeImage: {
@@ -196,13 +208,37 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  selectedOverlay: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    left: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(76, 175, 80, 0.2)',
+    justifyContent: 'flex-start',
+    alignItems: 'flex-end',
+  },
+  selectedBadgeTop: {
+    backgroundColor: '#4CAF50',
+    borderRadius: 12,
+    margin: 8,
+    padding: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
+  },
   themeInfo: {
-    padding: 12,
+    padding: 14,
+    minHeight: 68,
+    justifyContent: 'space-between',
   },
   themeName: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 4,
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 6,
+    lineHeight: 20,
   },
   progressInfo: {
     flexDirection: 'row',
@@ -213,22 +249,19 @@ const styles = StyleSheet.create({
   stageText: {
     fontSize: 12,
     fontWeight: '500',
+    flex: 1,
+  },
+  pointsBadge: {
+    backgroundColor: 'rgba(76, 175, 80, 0.1)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(76, 175, 80, 0.3)',
   },
   pointsText: {
-    fontSize: 11,
-  },
-  selectedBadge: {
-    backgroundColor: '#4CAF50',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
-    alignSelf: 'flex-start',
-    marginTop: 6,
-  },
-  selectedText: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: '600',
+    fontSize: 12,
+    fontWeight: '700',
   },
   loadingContainer: {
     flex: 1,

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Animated, Platform, Dimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
@@ -46,7 +46,7 @@ export default function FocusModeOverlay({
   const strokeWidth = 8;
   const radius = (size / 2) - (strokeWidth / 2);
   const circumference = 2 * Math.PI * radius;
-  const progress = timeRemaining / focusDurationSec;
+  const progress = focusDurationSec > 0 ? Math.max(0, Math.min(1, timeRemaining / focusDurationSec)) : 0;
   
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
@@ -66,97 +66,105 @@ export default function FocusModeOverlay({
     }
   }, [visible, fadeAnim]);
 
+  // コンポーネントのマウント解除時にアニメーションをクリーンアップ
+  useEffect(() => {
+    return () => {
+      fadeAnim.stopAnimation();
+    };
+  }, [fadeAnim]);
+
   if (!visible) return null;
-  
+
   return (
-    <Animated.View
+    <Animated.View 
       style={[
-        styles.contentContainer,
+        styles.overlay,
         {
-          top: -insets.top,
-          bottom: -insets.bottom,
-          left: -insets.left,
-          right: -insets.right,
           opacity: fadeAnim,
-        },
+        }
       ]}
     >
-      <TouchableOpacity onPress={onToggleMute} style={styles.audioButton}>
-        <Ionicons name={isMuted ? 'volume-mute' : 'volume-high'} size={24} color="#fff" />
-      </TouchableOpacity>
-      <View style={styles.timerContainer}>
-        <View style={styles.circularTimerContainer}>
-          <Svg width={size} height={size} style={styles.progressCircle}>
-            {/* 背景の円 */}
-            <Circle
-              cx={size / 2}
-              cy={size / 2}
-              r={radius}
-              stroke="rgba(255, 255, 255, 0.08)"
-              strokeWidth={strokeWidth}
-              fill="none"
-            />
-            {/* プログレス円 */}
-            <Circle
-              cx={size / 2}
-              cy={size / 2}
-              r={radius}
-              stroke="rgba(255, 255, 255, 0.85)"
-              strokeWidth={strokeWidth}
-              fill="none"
-              strokeDasharray={`${circumference} ${circumference}`}
-              strokeDashoffset={circumference * (1 - progress)}
-              rotation={90}
-              scaleX={-1}
-              originX={size / 2}
-              originY={size / 2}
-              strokeLinecap="round"
-            />
-          </Svg>
-          <View style={[styles.timerTextContainer, { width: size, height: size }]}>
-            <Text style={styles.timerText}>{formatTime(timeRemaining)}</Text>
-            <View style={styles.statusTextContainer}>
-              {focusModeStatus === 'paused' && (
-                <Text style={styles.statusText}>
-                  {t('focus_mode.paused')}
-                </Text>
-              )}
+      <View style={styles.contentContainer}>
+        <TouchableOpacity 
+          onPress={onToggleMute} 
+          style={[styles.audioButton, { top: 60 + insets.top }]}
+        >
+          <Ionicons name={isMuted ? 'volume-mute' : 'volume-high'} size={24} color="#fff" />
+        </TouchableOpacity>
+        <View style={styles.timerContainer}>
+          <View style={styles.circularTimerContainer}>
+            <Svg width={size} height={size} style={styles.progressCircle}>
+              {/* 背景の円 */}
+              <Circle
+                cx={size / 2}
+                cy={size / 2}
+                r={radius}
+                stroke="rgba(255, 255, 255, 0.08)"
+                strokeWidth={strokeWidth}
+                fill="none"
+              />
+              {/* プログレス円 */}
+              <Circle
+                cx={size / 2}
+                cy={size / 2}
+                r={radius}
+                stroke="rgba(255, 255, 255, 0.85)"
+                strokeWidth={strokeWidth}
+                fill="none"
+                strokeDasharray={`${circumference} ${circumference}`}
+                strokeDashoffset={circumference * (1 - progress)}
+                rotation={90}
+                scaleX={-1}
+                originX={size / 2}
+                originY={size / 2}
+                strokeLinecap="round"
+              />
+            </Svg>
+            <View style={[styles.timerTextContainer, { width: size, height: size }]}>
+              <Text style={styles.timerText}>{formatTime(timeRemaining)}</Text>
+              <View style={styles.statusTextContainer}>
+                {focusModeStatus === 'paused' && (
+                  <Text style={styles.statusText}>
+                    {t('focus_mode.paused')}
+                  </Text>
+                )}
+              </View>
             </View>
           </View>
-        </View>
-        <View style={styles.controls}>
-          {focusModeStatus === 'running' ? (
+          <View style={styles.controls}>
+            {focusModeStatus === 'running' ? (
+              <TouchableOpacity 
+                onPress={onPause} 
+                style={styles.controlButton}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="pause" size={32} color="rgba(255, 255, 255, 0.9)" />
+              </TouchableOpacity>
+            ) : focusModeStatus === 'paused' ? (
+              <TouchableOpacity 
+                onPress={onResume} 
+                style={styles.controlButton}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="play" size={32} color="rgba(255, 255, 255, 0.9)" />
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity 
+                onPress={onStart} 
+                style={styles.controlButton}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="play" size={32} color="rgba(255, 255, 255, 0.9)" />
+              </TouchableOpacity>
+            )}
             <TouchableOpacity 
-              onPress={onPause} 
+              onPress={onRestart} 
               style={styles.controlButton}
               activeOpacity={0.7}
             >
-              <Ionicons name="pause" size={32} color="rgba(255, 255, 255, 0.9)" />
+              <Ionicons name="reload" size={28} color="rgba(255, 255, 255, 0.7)" />
             </TouchableOpacity>
-          ) : focusModeStatus === 'paused' ? (
-            <TouchableOpacity 
-              onPress={onResume} 
-              style={styles.controlButton}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="play" size={32} color="rgba(255, 255, 255, 0.9)" />
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity 
-              onPress={onStart} 
-              style={styles.controlButton}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="play" size={32} color="rgba(255, 255, 255, 0.9)" />
-            </TouchableOpacity>
-          )}
-          <TouchableOpacity 
-            onPress={onRestart} 
-            style={styles.controlButton}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="reload" size={28} color="rgba(255, 255, 255, 0.7)" />
-          </TouchableOpacity>
+          </View>
         </View>
       </View>
     </Animated.View>
@@ -164,12 +172,18 @@ export default function FocusModeOverlay({
 }
 
 const styles = StyleSheet.create({
-  contentContainer: {
+  overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 10,
+  },
+  contentContainer: {
+    backgroundColor: 'transparent',
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '100%',
+    height: '100%',
   },
   timerContainer: {
     alignItems: 'center',
@@ -237,7 +251,6 @@ const styles = StyleSheet.create({
   },
   audioButton: {
     position: 'absolute',
-    top: 60,
     right: 30,
     padding: 16,
     backgroundColor: 'rgba(255, 255, 255, 0.06)',

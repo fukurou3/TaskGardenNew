@@ -22,6 +22,7 @@ function InnerTabs() {
 
   const fontSizeMap: Record<string, number> = useMemo(() => ({
     small: 10,
+    normal: 12,
     medium: 12,
     large: 14,
   }), []);

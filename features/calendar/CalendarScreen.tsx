@@ -248,7 +248,7 @@ export default function CalendarPage() {
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
        <View style={styles.appBar}>
-         <Text style={styles.titleText}>{t('calendar.title')}</Text>
+         <Text style={styles.title}>{t('calendar.title')}</Text>
        </View>
       <View style={styles.monthHeader}>
             <Text style={styles.monthText}>

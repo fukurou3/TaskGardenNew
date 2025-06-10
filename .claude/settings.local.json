@@ -19,7 +19,9 @@
       "Bash(git commit:*)",
       "Bash(git config:*)",
       "Bash(npx tsc:*)",
-      "Bash(timeout 15 npx expo start --clear)"
+      "Bash(timeout 15 npx expo start --clear)",
+      "Bash(git push:*)",
+      "Bash(rg:*)"
     ],
     "deny": []
   }
