@@ -135,7 +135,6 @@ export default function DurationPickerModal({
                     backgroundColor: 'transparent',
                   }}
                   decelerationRate="fast"
-                  snapToAlignment="center"
                   scrollEventThrottle={16}
                   showsVerticalScrollIndicator={false}
                   bounces={true}
