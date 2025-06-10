@@ -9,7 +9,6 @@ import {
   ImageBackground,
   Animated,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useAppTheme } from '@/hooks/ThemeContext';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
@@ -135,12 +134,9 @@ export default function PickupSlideshow() {
             onPress={() => handlePickupPress(pickup)}
             activeOpacity={0.9}
           >
-            <LinearGradient
-              colors={pickup.gradientColors}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.slideGradient}
-            >
+            <View style={[styles.slideGradient, { 
+              backgroundColor: pickup.gradientColors ? pickup.gradientColors[0] : '#2196F3'
+            }]}>
               <View style={styles.slideContent}>
                 <View style={styles.textContainer}>
                   {pickup.subtitle && (
@@ -167,7 +163,7 @@ export default function PickupSlideshow() {
                   </View>
                 </View>
               </View>
-            </LinearGradient>
+            </View>
           </TouchableOpacity>
         ))}
       </ScrollView>

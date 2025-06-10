@@ -1,6 +1,5 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useAppTheme } from '@/hooks/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useCurrency } from '../hooks/useCurrency';
@@ -17,13 +16,11 @@ export default function CurrencyOverlay({ showAddButton = false, onAddPress }: C
 
   return (
     <View style={styles.overlay}>
-      <LinearGradient
-        colors={isDark 
-          ? ['rgba(33, 150, 243, 0.9)', 'rgba(25, 118, 210, 0.9)']
-          : ['rgba(33, 150, 243, 0.95)', 'rgba(25, 118, 210, 0.95)']
-        }
-        style={styles.currencyContainer}
-      >
+      <View style={[styles.currencyContainer, { 
+        backgroundColor: isDark 
+          ? 'rgba(33, 150, 243, 0.9)'
+          : 'rgba(33, 150, 243, 0.95)'
+      }]}>
         <View style={styles.currencyInfo}>
           <Text style={styles.currencyIcon}>💎</Text>
           <Text style={styles.currencyAmount}>{formatAmount(amount)}</Text>
@@ -38,7 +35,7 @@ export default function CurrencyOverlay({ showAddButton = false, onAddPress }: C
             <Ionicons name="add" size={16} color="#fff" />
           </TouchableOpacity>
         )}
-      </LinearGradient>
+      </View>
     </View>
   );
 }

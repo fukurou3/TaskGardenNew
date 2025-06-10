@@ -48,39 +48,19 @@ export default function DurationPickerModal({
   useEffect(() => {
     if (visible !== prevVisible.current) {
       if (visible) {
-        // 表示アニメーション
+        // 表示アニメーション - フェードイン効果
         fadeAnim.setValue(0);
-        scaleAnim.setValue(0.8);
-        Animated.parallel([
-          Animated.timing(fadeAnim, {
-            toValue: 1,
-            duration: 300,
-            easing: Easing.out(Easing.quad),
-            useNativeDriver: true,
-          }),
-          Animated.timing(scaleAnim, {
-            toValue: 1,
-            duration: 300,
-            easing: Easing.out(Easing.back(1.1)),
-            useNativeDriver: true,
-          }),
-        ]).start();
+        scaleAnim.setValue(1);
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 1000,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }).start();
       } else {
-        // 非表示アニメーション
-        Animated.parallel([
-          Animated.timing(fadeAnim, {
-            toValue: 0,
-            duration: 250,
-            easing: Easing.in(Easing.quad),
-            useNativeDriver: true,
-          }),
-          Animated.timing(scaleAnim, {
-            toValue: 0.8,
-            duration: 250,
-            easing: Easing.in(Easing.quad),
-            useNativeDriver: true,
-          }),
-        ]).start();
+        // 非表示アニメーション - 即座に非表示
+        fadeAnim.setValue(0);
+        scaleAnim.setValue(1);
       }
       prevVisible.current = visible;
     }
@@ -230,13 +210,13 @@ const styles = StyleSheet.create({
   backdrop: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'transparent',
-    zIndex: 7,
+    zIndex: 10,
   },
   modalContainer: {
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
     alignItems: 'center',
-    zIndex: 8,
+    zIndex: 11,
   },
   container: { 
     backgroundColor: 'transparent',

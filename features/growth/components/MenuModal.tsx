@@ -36,7 +36,7 @@ export default function MenuModal({ visible, onSelectDictionary, onSelectGacha, 
 }
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
   content: { backgroundColor: '#fff', borderRadius: 10, padding: 20, width: '90%', maxHeight: '80%' },
   item: { paddingVertical: 10 },
   itemText: { fontSize: 16, textAlign: 'center', paddingVertical: 5 },

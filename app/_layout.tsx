@@ -10,6 +10,12 @@ import 'react-native-reanimated';
 import i18n, { initI18n } from '@/lib/i18n';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import TasksDatabase from '@/lib/TaskDatabase';
+import dayjs from 'dayjs';
+
+// Ensure dayjs is properly initialized
+if (typeof dayjs !== 'function') {
+  console.error('dayjs is not properly imported');
+}
 
 import { ThemeProvider, useAppTheme } from '@/hooks/ThemeContext';
 import { FontSizeProvider } from '@/context/FontSizeContext';

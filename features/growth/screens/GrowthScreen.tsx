@@ -73,6 +73,7 @@ export default function GrowthScreen() {
   // アニメーション用のAnimated.Value
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const scaleAnim = useRef(new Animated.Value(1)).current;
+  const overlayFadeAnim = useRef(new Animated.Value(0)).current;
   
   const timerIntervalRef = useRef<number | null>(null);
   const startTimeRef = useRef<number>(0);
@@ -123,57 +124,29 @@ export default function GrowthScreen() {
     console.log(`Animation transition: ${from} -> ${to}`);
     setIsTransitioning(true);
     
-    // 成長画面 ↔ ピッカー画面は1.2秒、ピッカー ↔ タイマーは即座遷移
-    const duration = (from === 'normal' && to === 'picker') || (from === 'picker' && to === 'normal') ? 1200 : 0;
+    // 成長画面 → ピッカーのみフェードイン効果、他は即座遷移
+    const shouldAnimate = from === 'normal' && to === 'picker';
+    const duration = shouldAnimate ? 300 : 0;
     console.log(`Animation duration: ${duration}ms`);
     
     if (duration === 0) {
-      // 即座遷移（ピッカー ↔ タイマー）
+      // 即座遷移
       setViewMode(to);
       if (callback) callback();
       console.log(`Immediate transition completed: ${from} -> ${to}`);
       setIsTransitioning(false);
     } else {
-      // アニメーション遷移（成長画面 ↔ ピッカー）
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 0,
-          duration: duration / 2,
-          easing: Easing.out(Easing.quad),
-          useNativeDriver: true,
-        }),
-        Animated.timing(scaleAnim, {
-          toValue: 0.95,
-          duration: duration / 2,
-          easing: Easing.out(Easing.quad),
-          useNativeDriver: true,
-        }),
-      ]).start(() => {
-        // 画面切替
-        setViewMode(to);
-        if (callback) callback();
-        
-        // Enter アニメーション
-        Animated.parallel([
-          Animated.timing(fadeAnim, {
-            toValue: 1,
-            duration: duration / 2,
-            easing: Easing.out(Easing.quad),
-            useNativeDriver: true,
-          }),
-          Animated.timing(scaleAnim, {
-            toValue: 1,
-            duration: duration / 2,
-            easing: Easing.out(Easing.quad),
-            useNativeDriver: true,
-          }),
-        ]).start(() => {
-          console.log(`Animation completed: ${from} -> ${to}`);
-          setIsTransitioning(false);
-        });
-      });
+      // フェードイン効果（成長画面 → ピッカー）
+      setViewMode(to);
+      if (callback) callback();
+      
+      // ピッカーをフェードインで表示
+      setTimeout(() => {
+        console.log(`Fade-in animation completed: ${from} -> ${to}`);
+        setIsTransitioning(false);
+      }, duration);
     }
-  }, [isTransitioning, fadeAnim, scaleAnim]);
+  }, [isTransitioning]);
 
   // GrowthScreenにフォーカスされた時にタスクを再読み込み
   useFocusEffect(
@@ -523,19 +496,6 @@ export default function GrowthScreen() {
           onClose={() => setMenuVisible(false)}
         />
 
-        <DurationPickerModal
-          visible={viewMode === 'picker'}
-          hours={tempHours}
-          minutes={tempMinutes}
-          seconds={tempSeconds}
-          onChangeHours={(val) => setTempHours(val)}
-          onChangeMinutes={(val) => setTempMinutes(val)}
-          onChangeSeconds={(val) => setTempSeconds(val)}
-          onConfirm={confirmDurationPicker}
-          onClose={cancelTimer}
-          textColor="#fff"
-        />
-
         {viewMode === 'normal' && (
           <View style={styles.bottomActions}>
             <TouchableOpacity 
@@ -565,18 +525,32 @@ export default function GrowthScreen() {
         )}
       </Animated.View>
 
-      {/* 薄暗いオーバーレイ - Animated.Viewの外で管理して確実に全面均一にする */}
-      {(viewMode === 'picker' || viewMode === 'timer' || isTransitioning) && (
+      {/* 薄暗いオーバーレイ - ピッカー表示時または遷移中 */}
+      {(viewMode === 'picker' || (isTransitioning && viewMode !== 'normal')) && (
         <Animated.View 
           style={[
             styles.pickerDimOverlay,
             { 
               opacity: viewMode === 'normal' ? fadeAnim : 1,
-              pointerEvents: viewMode === 'picker' ? 'auto' : 'none'
+              pointerEvents: 'none'
             }
           ]} 
         />
       )}
+
+      {/* ピッカーモーダル - 薄暗いオーバーレイの上に配置 */}
+      <DurationPickerModal
+        visible={viewMode === 'picker'}
+        hours={tempHours}
+        minutes={tempMinutes}
+        seconds={tempSeconds}
+        onChangeHours={(val) => setTempHours(val)}
+        onChangeMinutes={(val) => setTempMinutes(val)}
+        onChangeSeconds={(val) => setTempSeconds(val)}
+        onConfirm={confirmDurationPicker}
+        onClose={cancelTimer}
+        textColor="#fff"
+      />
     </View>
   );
 }
@@ -595,7 +569,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
     zIndex: 5,
   },
   loadingText: {

@@ -1,5 +1,5 @@
 // app/(tabs)/calendar/index.tsx
-import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { View, FlatList, Text, ActivityIndicator, Pressable, TouchableOpacity, Platform, useWindowDimensions } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { getItem } from '@/lib/Storage';
@@ -41,16 +41,45 @@ export default function CalendarPage() {
 
   const { enabled: googleEnabled } = useGoogleCalendarSync();
 
-  const [displayMonth, setDisplayMonth] = useState(dayjs());
+  const [displayMonth, setDisplayMonth] = useState<dayjs.Dayjs>(() => dayjs());
   const [backgroundImage, setBackgroundImage] = useState<number | null>(null);
   const opacity = useSharedValue(1);
 
   const [tasks, setTasks] = useState<Task[]>([]);
   const [selectedDate, setSelectedDate] = useState<string>(dayjs().format('YYYY-MM-DD'));
   const [viewType, setViewType] = useState<'list' | 'full'>('list');
+
+  // displayMonthが正しく初期化されているかチェック
+  useEffect(() => {
+    if (!displayMonth || !displayMonth.format) {
+      console.log('Reinitializing displayMonth');
+      setDisplayMonth(dayjs());
+    }
+  }, []);
   const pagerRef = useRef<PagerView>(null);
-  const prevMonth = useMemo(() => displayMonth.subtract(1, 'month'), [displayMonth]);
-  const nextMonth = useMemo(() => displayMonth.add(1, 'month'), [displayMonth]);
+  const prevMonth = useMemo(() => {
+    try {
+      if (displayMonth && displayMonth.subtract) {
+        return displayMonth.subtract(1, 'month');
+      }
+      return dayjs().subtract(1, 'month');
+    } catch (error) {
+      console.error('Error calculating prevMonth:', error);
+      return dayjs().subtract(1, 'month');
+    }
+  }, [displayMonth]);
+  
+  const nextMonth = useMemo(() => {
+    try {
+      if (displayMonth && displayMonth.add) {
+        return displayMonth.add(1, 'month');
+      }
+      return dayjs().add(1, 'month');
+    } catch (error) {
+      console.error('Error calculating nextMonth:', error);
+      return dayjs().add(1, 'month');
+    }
+  }, [displayMonth]);
 
   const { events: googleAllEvents, loading: googleLoading } = useGoogleCalendarAllEvents(googleEnabled);
 
@@ -60,6 +89,9 @@ export default function CalendarPage() {
   const fullCellHeight = useMemo(() => listCellHeight * FULL_CELL_HEIGHT_FACTOR, [listCellHeight]);
 
   const getCalendarHeight = useCallback((type: 'list' | 'full', month: dayjs.Dayjs) => {
+    if (!month || typeof month.startOf !== 'function') {
+      month = dayjs();
+    }
     const cellH = type === 'full' ? fullCellHeight : listCellHeight;
     const firstDayOfMonth = month.startOf('month');
     const daysInMonth = month.daysInMonth();
@@ -69,6 +101,9 @@ export default function CalendarPage() {
   }, [listCellHeight, fullCellHeight]);
 
   const getNumRows = useCallback((month: dayjs.Dayjs) => {
+    if (!month || typeof month.startOf !== 'function') {
+      month = dayjs();
+    }
     const firstDayOfMonth = month.startOf('month');
     const daysInMonth = month.daysInMonth();
     const startDayOfWeek = firstDayOfMonth.day();
@@ -79,7 +114,11 @@ export default function CalendarPage() {
 
   // displayMonthやviewTypeが変わった時にも高さを更新
   useEffect(() => {
-    calendarHeight.value = withTiming(getCalendarHeight(viewType, displayMonth), { duration: 300 });
+    const newHeight = getCalendarHeight(viewType, displayMonth);
+    calendarHeight.value = withTiming(newHeight, { 
+      duration: 200,
+      easing: Easing.out(Easing.cubic)
+    });
   }, [displayMonth, viewType, getCalendarHeight, calendarHeight]);
   
   const animatedCalendarStyle = useAnimatedStyle(() => {
@@ -132,15 +171,21 @@ export default function CalendarPage() {
   }, [allMonthEvents, displayMonth]);
 
   useEffect(() => {
-    const prev = displayMonth.subtract(1, 'month');
-    const next = displayMonth.add(1, 'month');
-    [prev, next].forEach(m => {
-      const key = m.format('YYYY-MM');
-      if (!eventCache[key]) {
-        const layout = processMultiDayEvents(allMonthEvents, m);
-        setEventCache(prevCache => ({ ...prevCache, [key]: layout }));
+    try {
+      if (displayMonth && displayMonth.subtract && displayMonth.add) {
+        const prev = displayMonth.subtract(1, 'month');
+        const next = displayMonth.add(1, 'month');
+        [prev, next].forEach(m => {
+          const key = m.format('YYYY-MM');
+          if (!eventCache[key]) {
+            const layout = processMultiDayEvents(allMonthEvents, m);
+            setEventCache(prevCache => ({ ...prevCache, [key]: layout }));
+          }
+        });
       }
-    });
+    } catch (error) {
+      console.error('Error updating event cache:', error);
+    }
   }, [displayMonth, allMonthEvents]);
   const dayTasks = useMemo(() => groupedTasks[selectedDate] || [], [groupedTasks, selectedDate]);
   const googleDayEvents = useMemo(() => {
@@ -152,14 +197,36 @@ export default function CalendarPage() {
     (e: PagerViewOnPageSelectedEvent) => {
       const index = e.nativeEvent.position;
       if (index === 1) return;
+      
+      let newMonth: dayjs.Dayjs;
       if (index === 2) {
-        setDisplayMonth(cur => cur.add(1, 'month'));
+        newMonth = displayMonth && displayMonth.add ? displayMonth.add(1, 'month') : dayjs().add(1, 'month');
       } else if (index === 0) {
-        setDisplayMonth(cur => cur.subtract(1, 'month'));
+        newMonth = displayMonth && displayMonth.subtract ? displayMonth.subtract(1, 'month') : dayjs().subtract(1, 'month');
+      } else {
+        return;
       }
+      
+      // 月を更新
+      setDisplayMonth(newMonth);
+      
+      // 選択日付の調整
+      const selectedDay = dayjs(selectedDate);
+      if (!selectedDay.isSame(newMonth, 'month')) {
+        const targetDay = selectedDay.date();
+        const daysInNewMonth = newMonth.daysInMonth();
+        
+        if (targetDay <= daysInNewMonth) {
+          setSelectedDate(newMonth.date(targetDay).format('YYYY-MM-DD'));
+        } else {
+          setSelectedDate(newMonth.endOf('month').format('YYYY-MM-DD'));
+        }
+      }
+      
+      // ページをリセット
       pagerRef.current?.setPageWithoutAnimation(1);
     },
-    []
+    [displayMonth, selectedDate]
   );
 
   const onDayPress = useCallback((date: string) => {
@@ -169,8 +236,12 @@ export default function CalendarPage() {
   const onTodayPress = useCallback(() => {
       const today = dayjs();
       setSelectedDate(today.format('YYYY-MM-DD'));
-      if (!displayMonth.isSame(today, 'month')) {
-          setDisplayMonth(today);
+      if (!displayMonth || typeof displayMonth.isSame !== 'function' || !displayMonth.isSame(today, 'month')) {
+          if (today && typeof today.format === 'function') {
+            setDisplayMonth(today);
+          } else {
+            setDisplayMonth(dayjs());
+          }
       }
   }, [displayMonth]);
 
@@ -180,8 +251,8 @@ export default function CalendarPage() {
       const newType = v === 'list' ? 'full' : 'list';
       const newHeight = getCalendarHeight(newType, displayMonth);
       calendarHeight.value = withTiming(newHeight, { 
-        duration: 400,
-        easing: Easing.out(Easing.quad), // アニメーションの速度変化
+        duration: 350,
+        easing: Easing.out(Easing.cubic),
       });
       return newType;
     });
@@ -259,7 +330,10 @@ export default function CalendarPage() {
        </View>
       <View style={styles.monthHeader}>
             <Text style={styles.monthText}>
-                {displayMonth.format(t('common.year_month_format'))}
+                {displayMonth && displayMonth.format 
+                  ? displayMonth.format(t('common.year_month_format'))
+                  : dayjs().format(t('common.year_month_format'))
+                }
             </Text>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                 <Pressable onPress={onTodayPress} style={styles.todayButton}>

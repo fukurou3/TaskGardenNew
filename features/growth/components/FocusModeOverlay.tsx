@@ -57,23 +57,15 @@ export default function FocusModeOverlay({
   useEffect(() => {
     if (visible !== prevVisible.current) {
       if (visible) {
-        // 表示アニメーション
-        fadeAnim.setValue(0);
+        // 表示アニメーション - 即座に薄暗いオーバーレイを表示
+        fadeAnim.setValue(1);
         scaleAnim.setValue(0.9);
-        Animated.parallel([
-          Animated.timing(fadeAnim, {
-            toValue: 1,
-            duration: 300,
-            easing: Easing.out(Easing.quad),
-            useNativeDriver: true,
-          }),
-          Animated.timing(scaleAnim, {
-            toValue: 1,
-            duration: 300,
-            easing: Easing.out(Easing.quad),
-            useNativeDriver: true,
-          }),
-        ]).start();
+        Animated.timing(scaleAnim, {
+          toValue: 1,
+          duration: 300,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }).start();
       } else {
         // 非表示アニメーション
         Animated.parallel([
@@ -99,7 +91,8 @@ export default function FocusModeOverlay({
 
   return (
     <Animated.View style={[styles.overlay, { opacity: fadeAnim }]}>
-      {/* 薄暗いオーバーレイは成長画面側で管理するため削除 */}
+      {/* タイマー専用の薄暗いオーバーレイ - 常に不透明度1で表示 */}
+      <View style={styles.dimOverlay} />
       <Animated.View 
         style={[
           styles.contentContainer,
@@ -202,6 +195,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: 'transparent',
     zIndex: 10,
+  },
+  dimOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    zIndex: 1,
   },
   contentContainer: {
     backgroundColor: 'transparent',
