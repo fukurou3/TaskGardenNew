@@ -230,7 +230,7 @@ export default function CalendarPage() {
   // SkiaCalendarのtheme propに渡す色を定義
   const textColor = isDark ? '#EAEAEA' : '#333333';
   const subTextColor = isDark ? '#999999' : '#777777';
-  const borderColor = isDark ? '#333333' : '#EAEAEA';
+  const borderColor = isDark ? '#2A2A2A' : '#E8E8E8';
   const dynamicSubColor = subColor || (isDark ? '#5A9CF8' : '#3A75C4');
   
   const skiaTheme = useMemo(() => ({

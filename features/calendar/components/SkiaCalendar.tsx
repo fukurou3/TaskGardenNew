@@ -138,7 +138,7 @@ export default function SkiaCalendar({
               </Group>
             )}
 
-            <Path path={gridPath} color={theme.line} style="stroke" strokeWidth={StyleSheet.hairlineWidth} />
+            <Path path={gridPath} color={theme.line} style="stroke" strokeWidth={0.4} />
             
             {weekdays.map((day, i) => {
               let weekdayColor = theme.weekday;

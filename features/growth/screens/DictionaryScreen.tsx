@@ -7,7 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useGrowth } from '../hooks/useGrowth';
 import PickupSlideshow from '../components/PickupSlideshow';
-import CurrencyOverlay from '../components/CurrencyHeader';
+import GrowthHeader from '../components/GrowthHeader';
 
 export default function DictionaryScreen() {
   const { colorScheme } = useAppTheme();
@@ -39,27 +39,7 @@ export default function DictionaryScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#1a1a1a' : '#f5f5f5' }]}>
-      <CurrencyOverlay />
-      
-      <View style={styles.header}>
-        <Text style={[styles.title, { color: isDark ? '#fff' : '#000' }]}>世界図鑑 (World Dex)</Text>
-        <View style={styles.actionButtons}>
-          <TouchableOpacity 
-            style={[styles.actionButton, { backgroundColor: isDark ? '#333' : '#e0e0e0' }]}
-            onPress={() => router.push('/(tabs)/growth/gacha')}
-          >
-            <Ionicons name="gift" size={20} color={isDark ? '#fff' : '#000'} />
-            <Text style={[styles.actionButtonText, { color: isDark ? '#fff' : '#000' }]}>ガチャ</Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.actionButton, { backgroundColor: isDark ? '#333' : '#e0e0e0' }]}
-            onPress={() => router.push('/(tabs)/growth/store')}
-          >
-            <Ionicons name="storefront" size={20} color={isDark ? '#fff' : '#000'} />
-            <Text style={[styles.actionButtonText, { color: isDark ? '#fff' : '#000' }]}>ストア</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+      <GrowthHeader />
 
       <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
         <PickupSlideshow />
@@ -138,31 +118,6 @@ export default function DictionaryScreen() {
 const styles = StyleSheet.create({
   container: { 
     flex: 1,
-  },
-  header: {
-    padding: 20,
-    paddingBottom: 10,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 15,
-  },
-  actionButtons: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    gap: 6,
-  },
-  actionButtonText: {
-    fontSize: 14,
-    fontWeight: '500',
   },
   content: {
     flex: 1,

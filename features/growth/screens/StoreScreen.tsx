@@ -6,7 +6,7 @@ import { useAppTheme } from '@/hooks/ThemeContext';
 import { useTranslation } from 'react-i18next';
 import { useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import CurrencyOverlay from '../components/CurrencyHeader';
+import GrowthHeader from '../components/GrowthHeader';
 import { useCurrency } from '../hooks/useCurrency';
 import { STORE_CATEGORIES, getSaleItems, getLimitedItems, getFeaturedItems, StoreItem } from '../config/storeConfig';
 
@@ -154,13 +154,10 @@ export default function StoreScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#1a1a1a' : '#f5f5f5' }]}>
-      <CurrencyOverlay showAddButton onAddPress={handleAddCurrency} />
+      <GrowthHeader showAddButton onAddPress={handleAddCurrency} />
       
       <View style={styles.content}>
         <View style={styles.header}>
-          <Text style={[styles.title, { color: isDark ? '#fff' : '#000' }]}>
-            ストア
-          </Text>
           <Text style={[styles.subtitle, { color: isDark ? '#ccc' : '#666' }]}>
             テーマや通貨をお得に購入しよう！
           </Text>
@@ -222,13 +219,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    padding: 20,
+    paddingHorizontal: 20,
     paddingBottom: 10,
-  },
-  title: { 
-    fontSize: 28,
-    fontWeight: '800',
-    marginBottom: 8,
   },
   subtitle: {
     fontSize: 16,
