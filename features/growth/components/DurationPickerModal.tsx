@@ -41,6 +41,20 @@ export default function DurationPickerModal({
   
   const [internalHours, setInternalHours] = useState(1);
   const [internalMinutes, setInternalMinutes] = useState(0);
+
+  const [shouldRender, setShouldRender] = useState(visible);
+
+  useEffect(() => {
+    if (visible) {
+      setShouldRender(true);
+    }
+  }, [visible]);
+
+  const handleModalHide = () => {
+    if (!visible) {
+      setShouldRender(false);
+    }
+  };
   
   // 保存された値を読み込み
   useEffect(() => {
@@ -101,7 +115,7 @@ export default function DurationPickerModal({
 
   return (
     <Modal
-      isVisible={visible}
+      isVisible={shouldRender}
       animationIn="fadeIn"
       animationOut="fadeOut"
       style={styles.modal}
@@ -113,6 +127,7 @@ export default function DurationPickerModal({
       useNativeDriverForBackdrop
       onBackdropPress={onClose}
       onBackButtonPress={() => { onClose(); return true; }}
+      onModalHide={handleModalHide}
     >
       <View style={styles.container}>
         <View style={styles.row}>
