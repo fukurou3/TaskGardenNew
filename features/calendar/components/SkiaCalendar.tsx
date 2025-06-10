@@ -41,6 +41,7 @@ interface SkiaCalendarProps {
   groupedTasks: Record<string, Task[]>;
   eventLayout: EventLayout;
   showTaskTitles?: boolean;
+  numRows?: number;
   theme: {
     primary: string;
     weekday: string;
@@ -62,6 +63,7 @@ export default function SkiaCalendar({
   groupedTasks,
   eventLayout,
   showTaskTitles = false,
+  numRows: providedNumRows,
   theme,
 }: SkiaCalendarProps) {
   const { t, i18n } = useTranslation();
@@ -81,7 +83,7 @@ export default function SkiaCalendar({
   const daysInMonth = targetDate.daysInMonth();
   const startDayOfWeek = firstDayOfMonth.day();
   const weekdays = [0, 1, 2, 3, 4, 5, 6].map(day => t(`calendar.weekdays.${day}`));
-  const numRows = Math.ceil((startDayOfWeek + daysInMonth) / 7);
+  const numRows = providedNumRows ?? Math.ceil((startDayOfWeek + daysInMonth) / 7);
   const calendarHeight = HEADER_HEIGHT + cellHeight * numRows;
 
   let gridPath = '';
@@ -125,14 +127,14 @@ export default function SkiaCalendar({
         <Canvas style={{ width: calendarWidth, height: calendarHeight }}>
           <Group opacity={opacity}>
             {backgroundImage && skiaImage && (
-              <Group clip={{ x: 0, y: HEADER_HEIGHT, width: calendarWidth, height: cellHeight * numRows }}>
+              <Group clip={{ x: 0, y: HEADER_HEIGHT, width: calendarWidth, height: calendarHeight - HEADER_HEIGHT }}>
                 <Image
                   image={skiaImage}
                   fit="cover"
                   x={0}
                   y={HEADER_HEIGHT}
                   width={calendarWidth}
-                  height={cellHeight * numRows}
+                  height={calendarHeight - HEADER_HEIGHT}
                   opacity={0.3}
                 />
               </Group>

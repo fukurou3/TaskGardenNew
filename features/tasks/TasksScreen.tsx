@@ -168,7 +168,7 @@ export default function TasksScreen() {
         <BlurView intensity={isDark ? 20 : 70} tint={isDark ? 'dark' : 'light'} style={styles.modalBlur}>
           <TouchableOpacity style={StyleSheet.absoluteFill} onPress={() => setSortModalVisible(false)} />
           <View style={styles.modalContainer}>
-            <View style={[styles.modalContent, {width: '80%', maxWidth: 300}]}>
+            <View style={styles.modalContent}>
                 <Text style={styles.modalTitle}>{t('sort.title')}</Text>
               <TouchableOpacity onPress={() => handleSortOptionSelect('deadline')} activeOpacity={0.7}>
                 <Text style={[styles.modalOption, {color: sortMode === 'deadline' ? subColor : (isDark ? '#E0E0E0' : '#222222'), fontWeight: sortMode === 'deadline' ? '600' : '400'}]}>

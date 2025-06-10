@@ -25,7 +25,7 @@ import { createCalendarStyles } from '@/features/calendar/styles';
 import { Ionicons } from '@expo/vector-icons';
 
 const CALENDAR_BG_KEY = '@calendar_background_id';
-const WEEKDAY_COLOR = '#888888';
+const WEEKDAY_COLOR = '#1c1c1c';
 const SUNDAY_COLOR = '#FF6666';
 const SATURDAY_COLOR = '#106ac4';
 // 曜日欄の高さに合わせて短くする
@@ -67,6 +67,13 @@ export default function CalendarPage() {
     const numRows = Math.ceil((startDayOfWeek + daysInMonth) / 7);
     return HEADER_HEIGHT + cellH * numRows;
   }, [listCellHeight, fullCellHeight]);
+
+  const getNumRows = useCallback((month: dayjs.Dayjs) => {
+    const firstDayOfMonth = month.startOf('month');
+    const daysInMonth = month.daysInMonth();
+    const startDayOfWeek = firstDayOfMonth.day();
+    return Math.ceil((startDayOfWeek + daysInMonth) / 7);
+  }, []);
 
   const calendarHeight = useSharedValue(getCalendarHeight('list', displayMonth));
 
@@ -213,7 +220,7 @@ export default function CalendarPage() {
     if (dayTasks.length === 0 && googleDayEvents.length === 0) {
         return (
             <View style={{alignItems: 'center', marginTop: 40}}>
-                <Text style={{color: '#888'}}>予定やタスクはありません</Text>
+                <Text style={{color: '#888'}}>タスクはありません</Text>
             </View>
         );
     }
@@ -235,14 +242,14 @@ export default function CalendarPage() {
   
   const skiaTheme = useMemo(() => ({
     primary: dynamicSubColor,
-    weekday: subTextColor,
+    weekday: WEEKDAY_COLOR,
     day: textColor,
     saturday: SATURDAY_COLOR,
     sunday: SUNDAY_COLOR,
     line: borderColor,
     background: 'transparent',
     eventText: '#FFFFFF',
-  }), [dynamicSubColor, subTextColor, textColor, borderColor]);
+  }), [dynamicSubColor, textColor, borderColor]);
 
 
   return (
@@ -288,6 +295,7 @@ export default function CalendarPage() {
                 groupedTasks={groupedTasks}
                 eventLayout={eventCache[prevMonth.format('YYYY-MM')] || eventLayout}
                 showTaskTitles={viewType === 'full'}
+                numRows={getNumRows(prevMonth)}
                 theme={skiaTheme}
               />
             </View>
@@ -301,6 +309,7 @@ export default function CalendarPage() {
                 groupedTasks={groupedTasks}
                 eventLayout={eventLayout}
                 showTaskTitles={viewType === 'full'}
+                numRows={getNumRows(displayMonth)}
                 theme={skiaTheme}
               />
             </View>
@@ -314,6 +323,7 @@ export default function CalendarPage() {
                 groupedTasks={groupedTasks}
                 eventLayout={eventCache[nextMonth.format('YYYY-MM')] || eventLayout}
                 showTaskTitles={viewType === 'full'}
+                numRows={getNumRows(nextMonth)}
                 theme={skiaTheme}
               />
             </View>

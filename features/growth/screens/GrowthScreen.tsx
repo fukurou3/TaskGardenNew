@@ -1,7 +1,7 @@
 // features/growth/GrowthScreen.tsx
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Vibration, Alert, useWindowDimensions, Animated } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Vibration, Alert, useWindowDimensions, Animated, Easing } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAppTheme } from '@/hooks/ThemeContext';
 import { useTranslation } from 'react-i18next';
@@ -21,6 +21,18 @@ import TimerSoundManager from '@/lib/TimerSoundManager';
 
 type FocusModeStatus = 'idle' | 'running' | 'paused';
 type ViewMode = 'normal' | 'picker' | 'timer';
+
+// 状態遷移の明示的定義
+const VALID_TRANSITIONS: Record<ViewMode, ViewMode[]> = {
+  normal: ['picker'],
+  picker: ['normal', 'timer'],
+  timer: ['normal', 'picker']
+};
+
+// 状態遷移の検証
+const isValidTransition = (from: ViewMode, to: ViewMode): boolean => {
+  return VALID_TRANSITIONS[from].includes(to);
+};
 
 export default function GrowthScreen() {
   const { colorScheme, subColor, setTemporaryDarkMode } = useAppTheme();
@@ -56,6 +68,11 @@ export default function GrowthScreen() {
   
   // 統合されたビューモード管理
   const [viewMode, setViewMode] = useState<ViewMode>('normal');
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  
+  // アニメーション用のAnimated.Value
+  const fadeAnim = useRef(new Animated.Value(1)).current;
+  const scaleAnim = useRef(new Animated.Value(1)).current;
   
   const timerIntervalRef = useRef<number | null>(null);
   const startTimeRef = useRef<number>(0);
@@ -91,6 +108,72 @@ export default function GrowthScreen() {
     setTempMinutes(minutes);
     setTempSeconds(0); // 秒数は常に0で初期化
   }, [focusDurationSec]);
+
+  // アニメーション付き画面遷移関数
+  const animateTransition = useCallback((from: ViewMode, to: ViewMode, callback?: () => void) => {
+    if (isTransitioning) {
+      console.log('Transition blocked: already transitioning');
+      return;
+    }
+    if (!isValidTransition(from, to)) {
+      console.warn(`Invalid transition: ${from} -> ${to}`);
+      return;
+    }
+    
+    console.log(`Animation transition: ${from} -> ${to}`);
+    setIsTransitioning(true);
+    
+    // 成長画面 ↔ ピッカー画面は1.2秒、ピッカー ↔ タイマーは即座遷移
+    const duration = (from === 'normal' && to === 'picker') || (from === 'picker' && to === 'normal') ? 1200 : 0;
+    console.log(`Animation duration: ${duration}ms`);
+    
+    if (duration === 0) {
+      // 即座遷移（ピッカー ↔ タイマー）
+      setViewMode(to);
+      if (callback) callback();
+      console.log(`Immediate transition completed: ${from} -> ${to}`);
+      setIsTransitioning(false);
+    } else {
+      // アニメーション遷移（成長画面 ↔ ピッカー）
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 0,
+          duration: duration / 2,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(scaleAnim, {
+          toValue: 0.95,
+          duration: duration / 2,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ]).start(() => {
+        // 画面切替
+        setViewMode(to);
+        if (callback) callback();
+        
+        // Enter アニメーション
+        Animated.parallel([
+          Animated.timing(fadeAnim, {
+            toValue: 1,
+            duration: duration / 2,
+            easing: Easing.out(Easing.quad),
+            useNativeDriver: true,
+          }),
+          Animated.timing(scaleAnim, {
+            toValue: 1,
+            duration: duration / 2,
+            easing: Easing.out(Easing.quad),
+            useNativeDriver: true,
+          }),
+        ]).start(() => {
+          console.log(`Animation completed: ${from} -> ${to}`);
+          setIsTransitioning(false);
+        });
+      });
+    }
+  }, [isTransitioning, fadeAnim, scaleAnim]);
 
   // GrowthScreenにフォーカスされた時にタスクを再読み込み
   useFocusEffect(
@@ -193,16 +276,24 @@ export default function GrowthScreen() {
   }, [focusDurationSec, t]);
 
   const showDurationPicker = useCallback(() => {
+    if (isTransitioning) return;
+    
     // ピッカー表示前に現在の設定値を同期、秒数は0にリセット
     const hours = Math.floor(focusDurationSec / 3600);
     const minutes = Math.floor((focusDurationSec % 3600) / 60);
     setTempHours(hours);
     setTempMinutes(minutes);
     setTempSeconds(0);
-    setViewMode('picker');
-  }, [focusDurationSec]);
+    
+    animateTransition('normal', 'picker');
+  }, [focusDurationSec, isTransitioning, animateTransition]);
 
   const confirmDurationPicker = useCallback(() => {
+    if (isTransitioning) {
+      console.log('confirmDurationPicker blocked: transitioning');
+      return;
+    }
+    
     const totalSec = tempHours * 3600 + tempMinutes * 60; // 秒数は含めない
     
     if (totalSec < 60) {
@@ -214,33 +305,36 @@ export default function GrowthScreen() {
       return;
     }
     
-    // 修正: 時間設定をstateに保存してからタイマーを開始
+    // 即座に状態更新（UI反応性向上）
     setFocusDurationSec(totalSec);
-    
-    // タイマー開始の処理
-    startTimeRef.current = Date.now();
-    if (notificationIdRef.current) {
-      Notifications.cancelScheduledNotificationAsync(notificationIdRef.current).catch(() => {});
-      notificationIdRef.current = null;
-    }
-    
-    Notifications.scheduleNotificationAsync({
-      content: {
-        title: t('growth.focus_mode_completed_title'),
-        body: t('growth.focus_mode_completed_message', {
-          minutes: Math.ceil(totalSec / 60),
-        }),
-      },
-      trigger: { seconds: totalSec, repeats: false },
-    }).then((id) => { 
-      notificationIdRef.current = id; 
-    });
-    
-    // 修正: 全て同時に設定
     setTimeRemaining(totalSec);
-    setViewMode('timer');
     setFocusModeStatus('running');
-  }, [tempHours, tempMinutes, t]);
+    
+    // アニメーション開始
+    animateTransition('picker', 'timer', () => {
+      // アニメーション完了後に非同期処理実行
+      startTimeRef.current = Date.now();
+      if (notificationIdRef.current) {
+        Notifications.cancelScheduledNotificationAsync(notificationIdRef.current).catch(() => {});
+        notificationIdRef.current = null;
+      }
+      
+      // 通知スケジュール（非同期、UI更新と分離）
+      Notifications.scheduleNotificationAsync({
+        content: {
+          title: t('growth.focus_mode_completed_title'),
+          body: t('growth.focus_mode_completed_message', {
+            minutes: Math.ceil(totalSec / 60),
+          }),
+        },
+        trigger: { seconds: totalSec, repeats: false },
+      }).then((id) => { 
+        notificationIdRef.current = id; 
+      }).catch(error => {
+        console.error('Failed to schedule notification:', error);
+      });
+    });
+  }, [tempHours, tempMinutes, t, isTransitioning, animateTransition]);
 
   const pauseFocusMode = useCallback(() => {
     if (timerIntervalRef.current !== null) {
@@ -273,6 +367,8 @@ export default function GrowthScreen() {
   }, [timeRemaining, t]);
 
   const cancelTimer = useCallback(() => {
+    if (isTransitioning) return;
+    
     if (timerIntervalRef.current) {
       clearInterval(timerIntervalRef.current);
       timerIntervalRef.current = null;
@@ -281,65 +377,80 @@ export default function GrowthScreen() {
       Notifications.cancelScheduledNotificationAsync(notificationIdRef.current).catch(() => {});
       notificationIdRef.current = null;
     }
-    setFocusModeStatus('idle');
-    setViewMode('normal');
-    setTimeRemaining(focusDurationSec);
     
-    // ピッカーの値も元に戻し、秒数は0にリセット
-    const hours = Math.floor(focusDurationSec / 3600);
-    const minutes = Math.floor((focusDurationSec % 3600) / 60);
-    setTempHours(hours);
-    setTempMinutes(minutes);
-    setTempSeconds(0);
-  }, [focusDurationSec]);
+    // ピッカーからの戻りはアニメーション付き
+    const currentMode = viewMode;
+    animateTransition(currentMode, 'normal', () => {
+      setFocusModeStatus('idle');
+      setTimeRemaining(focusDurationSec);
+      
+      // ピッカーの値も元に戻し、秒数は0にリセット
+      const hours = Math.floor(focusDurationSec / 3600);
+      const minutes = Math.floor((focusDurationSec % 3600) / 60);
+      setTempHours(hours);
+      setTempMinutes(minutes);
+      setTempSeconds(0);
+    });
+  }, [focusDurationSec, isTransitioning, viewMode, animateTransition]);
 
   const goBackToPicker = useCallback(() => {
+    if (isTransitioning) return;
+    
+    // 即座にタイマー停止（UI反応性向上）
     if (timerIntervalRef.current) {
       clearInterval(timerIntervalRef.current);
       timerIntervalRef.current = null;
     }
-    if (notificationIdRef.current) {
-      Notifications.cancelScheduledNotificationAsync(notificationIdRef.current).catch(() => {});
-      notificationIdRef.current = null;
-    }
-    
-    // 修正: 元の設定値（focusDurationSec）を基準にピッカーの値を設定
-    const hours = Math.floor(focusDurationSec / 3600);
-    const minutes = Math.floor((focusDurationSec % 3600) / 60);
-    setTempHours(hours);
-    setTempMinutes(minutes);
-    setTempSeconds(0); // 秒数は常に0にリセット
-    
     setFocusModeStatus('idle');
-    setViewMode('picker');
-  }, [focusDurationSec]);
+    
+    // アニメーション開始
+    animateTransition('timer', 'picker', () => {
+      // アニメーション完了後に非同期処理実行
+      if (notificationIdRef.current) {
+        Notifications.cancelScheduledNotificationAsync(notificationIdRef.current).catch(() => {});
+        notificationIdRef.current = null;
+      }
+      
+      // ピッカーの値設定
+      const hours = Math.floor(focusDurationSec / 3600);
+      const minutes = Math.floor((focusDurationSec % 3600) / 60);
+      setTempHours(hours);
+      setTempMinutes(minutes);
+      setTempSeconds(0); // 秒数は常に0にリセット
+    });
+  }, [focusDurationSec, isTransitioning, animateTransition]);
 
   const toggleMute = useCallback(() => {
     setMuted(prev => !prev);
   }, []);
 
   const stopFocusMode = useCallback(() => {
+    if (isTransitioning) return;
+    
+    // 即座にタイマー停止（UI反応性向上）
     if (timerIntervalRef.current) {
       clearInterval(timerIntervalRef.current);
       timerIntervalRef.current = null;
     }
-    if (notificationIdRef.current) {
-      Notifications.cancelScheduledNotificationAsync(notificationIdRef.current).catch(() => {});
-      notificationIdRef.current = null;
-    }
-    
-    // 修正: 初期値に戻すのではなく、設定された時間に戻す
     setFocusModeStatus('idle');
-    setViewMode('normal');
     setTimeRemaining(focusDurationSec);
     
-    // ピッカーの値も初期値に戻すが、秒数は0にリセット
-    const hours = Math.floor(focusDurationSec / 3600);
-    const minutes = Math.floor((focusDurationSec % 3600) / 60);
-    setTempHours(hours);
-    setTempMinutes(minutes);
-    setTempSeconds(0); // 秒数は常に0にリセット
-  }, [focusDurationSec]);
+    // アニメーション開始
+    animateTransition('timer', 'normal', () => {
+      // アニメーション完了後に非同期処理実行
+      if (notificationIdRef.current) {
+        Notifications.cancelScheduledNotificationAsync(notificationIdRef.current).catch(() => {});
+        notificationIdRef.current = null;
+      }
+      
+      // ピッカーの値リセット
+      const hours = Math.floor(focusDurationSec / 3600);
+      const minutes = Math.floor((focusDurationSec % 3600) / 60);
+      setTempHours(hours);
+      setTempMinutes(minutes);
+      setTempSeconds(0); // 秒数は常に0にリセット
+    });
+  }, [focusDurationSec, isTransitioning, animateTransition]);
 
   const formatTime = (totalSeconds: number) => {
     const hours = Math.floor(totalSeconds / 3600);
@@ -363,83 +474,108 @@ export default function GrowthScreen() {
 
   return (
     <View style={styles.container}>
-      
-      <GrowthDisplay
-        theme={currentTheme}
-        asset={currentThemeAsset || { image: PLACEHOLDER_IMAGE_FALLBACK }}
-      />
+      <Animated.View 
+        style={[
+          styles.animatedContainer,
+          {
+            opacity: fadeAnim,
+            transform: [{ scale: scaleAnim }]
+          }
+        ]}
+      >
+        <GrowthDisplay
+          theme={currentTheme}
+          asset={currentThemeAsset || { image: PLACEHOLDER_IMAGE_FALLBACK }}
+        />
 
-      <FocusModeOverlay
-        visible={viewMode === 'timer'}
-        width={width}
-        subColor={subColor}
-        isDark={isDark}
-        isMuted={isMuted}
-        focusModeStatus={focusModeStatus}
-        timeRemaining={timeRemaining}
-        focusDurationSec={focusDurationSec}
-        formatTime={formatTime}
-        onStart={startFocusMode}
-        onPause={pauseFocusMode}
-        onResume={resumeFocusMode}
-        onStop={stopFocusMode}
-        onToggleMute={toggleMute}
-        onRestart={goBackToPicker}
-      />
+        <FocusModeOverlay
+          visible={viewMode === 'timer'}
+          width={width}
+          subColor={subColor}
+          isDark={isDark}
+          isMuted={isMuted}
+          focusModeStatus={focusModeStatus}
+          timeRemaining={timeRemaining}
+          focusDurationSec={focusDurationSec}
+          formatTime={formatTime}
+          onStart={startFocusMode}
+          onPause={pauseFocusMode}
+          onResume={resumeFocusMode}
+          onStop={stopFocusMode}
+          onToggleMute={toggleMute}
+          onRestart={goBackToPicker}
+        />
 
-      <ThemeSelectionModal
-        visible={isThemeSelectionModalVisible}
-        themes={themes}
-        selectedId={selectedThemeId}
-        onSelect={changeSelectedTheme}
-        onClose={() => setThemeSelectionModalVisible(false)}
-      />
+        <ThemeSelectionModal
+          visible={isThemeSelectionModalVisible}
+          themes={themes}
+          selectedId={selectedThemeId}
+          onSelect={changeSelectedTheme}
+          onClose={() => setThemeSelectionModalVisible(false)}
+        />
 
-      <MenuModal
-        visible={isMenuVisible}
-        onSelectTheme={() => { setMenuVisible(false); setThemeSelectionModalVisible(true); }}
-        onSelectDictionary={() => { setMenuVisible(false); router.push('/(tabs)/growth/dictionary'); }}
-        onSelectGacha={() => { setMenuVisible(false); router.push('/(tabs)/growth/gacha'); }}
-        onSelectStore={() => { setMenuVisible(false); router.push('/(tabs)/growth/store'); }}
-        onClose={() => setMenuVisible(false)}
-      />
+        <MenuModal
+          visible={isMenuVisible}
+          onSelectTheme={() => { setMenuVisible(false); setThemeSelectionModalVisible(true); }}
+          onSelectDictionary={() => { setMenuVisible(false); router.push('/(tabs)/growth/dictionary'); }}
+          onSelectGacha={() => { setMenuVisible(false); router.push('/(tabs)/growth/gacha'); }}
+          onSelectStore={() => { setMenuVisible(false); router.push('/(tabs)/growth/store'); }}
+          onClose={() => setMenuVisible(false)}
+        />
 
-      <DurationPickerModal
-        visible={viewMode === 'picker'}
-        hours={tempHours}
-        minutes={tempMinutes}
-        seconds={tempSeconds}
-        onChangeHours={(val) => setTempHours(val)}
-        onChangeMinutes={(val) => setTempMinutes(val)}
-        onChangeSeconds={(val) => setTempSeconds(val)}
-        onConfirm={confirmDurationPicker}
-        onClose={cancelTimer}
-        textColor="#fff"
-      />
+        <DurationPickerModal
+          visible={viewMode === 'picker'}
+          hours={tempHours}
+          minutes={tempMinutes}
+          seconds={tempSeconds}
+          onChangeHours={(val) => setTempHours(val)}
+          onChangeMinutes={(val) => setTempMinutes(val)}
+          onChangeSeconds={(val) => setTempSeconds(val)}
+          onConfirm={confirmDurationPicker}
+          onClose={cancelTimer}
+          textColor="#fff"
+        />
 
-      {viewMode === 'normal' && (
-        <View style={styles.bottomActions}>
-          <TouchableOpacity 
-            onPress={toggleMute} 
-            style={styles.iconButton}
-          >
-            <Ionicons name={isMuted ? 'volume-mute' : 'volume-high'} size={24} color={tabIconColor} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={showDurationPicker}
-            style={styles.focusModeButton}
-          >
-            <Text style={[styles.focusModeToggleText, { color: '#333' }]}> 
-              {t('growth.focus_mode_button_start')} 
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => router.push('/(tabs)/growth/dictionary')}
-            style={styles.iconButton}
-          >
-            <Ionicons name="book" size={24} color={tabIconColor} />
-          </TouchableOpacity>
-        </View>
+        {viewMode === 'normal' && (
+          <View style={styles.bottomActions}>
+            <TouchableOpacity 
+              onPress={toggleMute} 
+              style={[styles.iconButton, { opacity: isTransitioning ? 0.5 : 1 }]}
+              disabled={isTransitioning}
+            >
+              <Ionicons name={isMuted ? 'volume-mute' : 'volume-high'} size={24} color={tabIconColor} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={showDurationPicker}
+              style={[styles.focusModeButton, { opacity: isTransitioning ? 0.5 : 1 }]}
+              disabled={isTransitioning}
+            >
+              <Text style={[styles.focusModeToggleText, { color: '#333' }]}> 
+                {t('growth.focus_mode_button_start')} 
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => router.push('/(tabs)/growth/dictionary')}
+              style={[styles.iconButton, { opacity: isTransitioning ? 0.5 : 1 }]}
+              disabled={isTransitioning}
+            >
+              <Ionicons name="book" size={24} color={tabIconColor} />
+            </TouchableOpacity>
+          </View>
+        )}
+      </Animated.View>
+
+      {/* 薄暗いオーバーレイ - Animated.Viewの外で管理して確実に全面均一にする */}
+      {(viewMode === 'picker' || viewMode === 'timer' || isTransitioning) && (
+        <Animated.View 
+          style={[
+            styles.pickerDimOverlay,
+            { 
+              opacity: viewMode === 'normal' ? fadeAnim : 1,
+              pointerEvents: viewMode === 'picker' ? 'auto' : 'none'
+            }
+          ]} 
+        />
       )}
     </View>
   );
@@ -449,6 +585,18 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f0f0f0',
+  },
+  animatedContainer: {
+    flex: 1,
+  },
+  pickerDimOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    zIndex: 5,
   },
   loadingText: {
     flex: 1,

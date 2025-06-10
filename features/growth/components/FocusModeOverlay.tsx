@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import React, { useRef, useEffect } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Platform, Animated, Easing } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
@@ -48,12 +48,67 @@ export default function FocusModeOverlay({
   const circumference = 2 * Math.PI * radius;
   const progress = focusDurationSec > 0 ? Math.max(0, Math.min(1, timeRemaining / focusDurationSec)) : 0;
 
+  // アニメーション用
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(0.9)).current;
+  const prevVisible = useRef(visible);
+
+  // アニメーション管理
+  useEffect(() => {
+    if (visible !== prevVisible.current) {
+      if (visible) {
+        // 表示アニメーション
+        fadeAnim.setValue(0);
+        scaleAnim.setValue(0.9);
+        Animated.parallel([
+          Animated.timing(fadeAnim, {
+            toValue: 1,
+            duration: 300,
+            easing: Easing.out(Easing.quad),
+            useNativeDriver: true,
+          }),
+          Animated.timing(scaleAnim, {
+            toValue: 1,
+            duration: 300,
+            easing: Easing.out(Easing.quad),
+            useNativeDriver: true,
+          }),
+        ]).start();
+      } else {
+        // 非表示アニメーション
+        Animated.parallel([
+          Animated.timing(fadeAnim, {
+            toValue: 0,
+            duration: 250,
+            easing: Easing.in(Easing.quad),
+            useNativeDriver: true,
+          }),
+          Animated.timing(scaleAnim, {
+            toValue: 0.9,
+            duration: 250,
+            easing: Easing.in(Easing.quad),
+            useNativeDriver: true,
+          }),
+        ]).start();
+      }
+      prevVisible.current = visible;
+    }
+  }, [visible, fadeAnim, scaleAnim]);
+
   if (!visible) return null;
 
   return (
-    <View style={styles.overlay}>
-      <View style={styles.dimOverlay} />
-      <View style={styles.contentContainer}>
+    <Animated.View style={[styles.overlay, { opacity: fadeAnim }]}>
+      {/* 薄暗いオーバーレイは成長画面側で管理するため削除 */}
+      <Animated.View 
+        style={[
+          styles.contentContainer,
+          {
+            opacity: fadeAnim,
+            transform: [{ scale: scaleAnim }]
+          }
+        ]}
+      >
         <TouchableOpacity 
           onPress={onToggleMute} 
           style={[styles.audioButton, { top: 60 + insets.top }]}
@@ -135,8 +190,8 @@ export default function FocusModeOverlay({
             </TouchableOpacity>
           </View>
         </View>
-      </View>
-    </View>
+      </Animated.View>
+    </Animated.View>
   );
 }
 
@@ -145,12 +200,8 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: 'transparent',
     zIndex: 10,
-  },
-  dimOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    zIndex: 1,
   },
   contentContainer: {
     backgroundColor: 'transparent',

@@ -6,6 +6,8 @@ import {
   StyleSheet,
   ScrollView,
   Platform,
+  Image,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAppTheme } from '@/hooks/ThemeContext';
@@ -80,28 +82,49 @@ export default function CalendarBackgroundScreen() {
             カレンダー画面の背景を選択してください。
           </Text>
 
-          {BACKGROUND_IMAGES.map((background) => (
-            <TouchableOpacity
-              key={background.id}
-              style={styles.soundOption}
-              onPress={() => handleBackgroundSelection(background)}
-            >
-              <View style={styles.soundInfo}>
-                <View
-                  style={[
-                    styles.radio,
-                    selectedBgId === background.id && styles.radioSelected,
-                  ]}
-                />
-                <View style={styles.soundDetails}>
-                  <Text style={styles.soundName}>{background.name}</Text>
-                  {background.id === 'none' && (
-                    <Text style={styles.systemLabel}>デフォルトの背景</Text>
+          <View style={styles.backgroundGrid}>
+            {BACKGROUND_IMAGES.map((background) => (
+              <TouchableOpacity
+                key={background.id}
+                style={[
+                  styles.backgroundCard,
+                  selectedBgId === background.id && styles.backgroundCardSelected,
+                ]}
+                onPress={() => handleBackgroundSelection(background)}
+                activeOpacity={0.8}
+              >
+                <View style={styles.backgroundImageContainer}>
+                  {background.preview ? (
+                    <Image 
+                      source={background.preview} 
+                      style={styles.backgroundImage} 
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <View style={[styles.noBackgroundPlaceholder, { backgroundColor: isDark ? '#333' : '#f0f0f0' }]}>
+                      <Text style={[styles.noBackgroundText, { color: isDark ? '#888' : '#999' }]}>なし</Text>
+                    </View>
+                  )}
+                  {selectedBgId === background.id && (
+                    <View style={styles.selectedOverlay}>
+                      <View style={styles.selectedBadge}>
+                        <Text style={styles.checkmark}>✓</Text>
+                      </View>
+                    </View>
                   )}
                 </View>
-              </View>
-            </TouchableOpacity>
-          ))}
+                
+                <View style={styles.backgroundInfo}>
+                  <Text style={styles.backgroundName} numberOfLines={1}>
+                    {background.name}
+                  </Text>
+                  {background.id === 'none' && (
+                    <Text style={styles.systemLabel}>デフォルト</Text>
+                  )}
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
         </View>
 
         <View style={styles.infoCard}>
@@ -176,39 +199,87 @@ const createStyles = (
       marginBottom: 20,
       lineHeight: fontSizes[fsKey] * 1.4,
     },
-    soundOption: {
+    backgroundGrid: {
       flexDirection: 'row',
-      alignItems: 'center',
-      paddingVertical: 12,
-      borderTopWidth: StyleSheet.hairlineWidth,
-      borderColor: isDark ? '#3A3A3C' : '#E0E0E0',
+      flexWrap: 'wrap',
+      gap: 12,
+      justifyContent: 'space-between',
     },
-    soundInfo: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      flex: 1,
+    backgroundCard: {
+      width: '47%',
+      borderRadius: 16,
+      overflow: 'hidden',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.15,
+      shadowRadius: 8,
+      elevation: 6,
+      marginBottom: 8,
+      backgroundColor: isDark ? '#2a2a2a' : '#fff',
     },
-    radio: {
-      width: 22,
-      height: 22,
-      borderRadius: 11,
+    backgroundCardSelected: {
+      borderColor: subColor,
       borderWidth: 2,
-      borderColor: isDark ? '#5A5A5E' : '#AEAEB2',
-      marginRight: 12,
+    },
+    backgroundImageContainer: {
+      width: '100%',
+      height: 120,
+      position: 'relative',
+    },
+    backgroundImage: {
+      width: '100%',
+      height: '100%',
+    },
+    noBackgroundPlaceholder: {
+      width: '100%',
+      height: '100%',
       justifyContent: 'center',
       alignItems: 'center',
     },
-    radioSelected: {
-      borderColor: subColor,
-      backgroundColor: subColor,
-    },
-    soundDetails: {
-      flex: 1,
-    },
-    soundName: {
-      fontSize: fontSizes[fsKey] + 1,
-      color: isDark ? '#EFEFF0' : '#1C1C1E',
+    noBackgroundText: {
+      fontSize: 16,
       fontWeight: '500',
+    },
+    selectedOverlay: {
+      position: 'absolute',
+      top: 0,
+      right: 0,
+      left: 0,
+      bottom: 0,
+      backgroundColor: 'rgba(76, 175, 80, 0.2)',
+      justifyContent: 'flex-start',
+      alignItems: 'flex-end',
+    },
+    selectedBadge: {
+      backgroundColor: subColor,
+      borderRadius: 12,
+      margin: 8,
+      padding: 4,
+      minWidth: 24,
+      minHeight: 24,
+      justifyContent: 'center',
+      alignItems: 'center',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.3,
+      shadowRadius: 4,
+      elevation: 4,
+    },
+    checkmark: {
+      color: '#fff',
+      fontSize: 14,
+      fontWeight: 'bold',
+    },
+    backgroundInfo: {
+      padding: 12,
+      minHeight: 50,
+      justifyContent: 'center',
+    },
+    backgroundName: {
+      fontSize: fontSizes[fsKey],
+      color: isDark ? '#EFEFF0' : '#1C1C1E',
+      fontWeight: '600',
+      textAlign: 'center',
     },
     systemLabel: {
       fontSize: fontSizes[fsKey] - 2,

@@ -1,5 +1,5 @@
-import React, { useEffect, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, Pressable, useWindowDimensions } from 'react-native';
+import React, { useEffect, useCallback, useMemo, useRef } from 'react';
+import { View, Text, StyleSheet, Pressable, useWindowDimensions, Animated, Easing } from 'react-native';
 import WheelPicker from 'react-native-wheely';
 import { useTranslation } from 'react-i18next';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -35,10 +35,57 @@ export default function DurationPickerModal({
   const { width } = useWindowDimensions();
   const pickerWidth = 90;
   
+  // アニメーション用
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(0.8)).current;
+  const prevVisible = useRef(visible);
+  
   // オプション配列をメモ化
   const hoursOptions = useMemo(() => Array.from({ length: 24 }, (_, i) => `${i}`), []);
   const minuteOptions = useMemo(() => Array.from({ length: 60 }, (_, i) => `${i}`), []);
   
+  // アニメーション管理
+  useEffect(() => {
+    if (visible !== prevVisible.current) {
+      if (visible) {
+        // 表示アニメーション
+        fadeAnim.setValue(0);
+        scaleAnim.setValue(0.8);
+        Animated.parallel([
+          Animated.timing(fadeAnim, {
+            toValue: 1,
+            duration: 300,
+            easing: Easing.out(Easing.quad),
+            useNativeDriver: true,
+          }),
+          Animated.timing(scaleAnim, {
+            toValue: 1,
+            duration: 300,
+            easing: Easing.out(Easing.back(1.1)),
+            useNativeDriver: true,
+          }),
+        ]).start();
+      } else {
+        // 非表示アニメーション
+        Animated.parallel([
+          Animated.timing(fadeAnim, {
+            toValue: 0,
+            duration: 250,
+            easing: Easing.in(Easing.quad),
+            useNativeDriver: true,
+          }),
+          Animated.timing(scaleAnim, {
+            toValue: 0.8,
+            duration: 250,
+            easing: Easing.in(Easing.quad),
+            useNativeDriver: true,
+          }),
+        ]).start();
+      }
+      prevVisible.current = visible;
+    }
+  }, [visible, fadeAnim, scaleAnim]);
+
   // 初期化処理（アプリ起動時に一度だけ実行）
   useEffect(() => {
     let isMounted = true;
@@ -81,9 +128,6 @@ export default function DurationPickerModal({
 
   return (
     <>
-      {/* 薄暗いオーバーレイ */}
-      <View style={styles.dimOverlay} />
-      
       {/* 背景のオーバーレイ */}
       <Pressable 
         style={styles.backdrop} 
@@ -91,7 +135,15 @@ export default function DurationPickerModal({
       />
       
       {/* ピッカーコンテンツ */}
-      <View style={styles.modalContainer}>
+      <Animated.View 
+        style={[
+          styles.modalContainer,
+          {
+            opacity: fadeAnim,
+            transform: [{ scale: scaleAnim }]
+          }
+        ]}
+      >
         <View style={styles.container}>
           <View style={styles.row}>
             <View style={styles.pickerGroup}>
@@ -169,27 +221,22 @@ export default function DurationPickerModal({
             </Pressable>
           </View>
         </View>
-      </View>
+      </Animated.View>
     </>
   );
 }
 
 const styles = StyleSheet.create({
-  dimOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    zIndex: 998,
-  },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'transparent',
-    zIndex: 999,
+    zIndex: 7,
   },
   modalContainer: {
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
     alignItems: 'center',
-    zIndex: 1000,
+    zIndex: 8,
   },
   container: { 
     backgroundColor: 'transparent',

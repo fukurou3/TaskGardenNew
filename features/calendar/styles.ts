@@ -91,7 +91,7 @@ export const createCalendarStyles = (isDark: boolean, subColor: string): Calenda
         marginLeft: 8,
         padding: 6,
         borderRadius: 20,
-        backgroundColor: isDark ? '#2C2C2E' : '#E5E5EA', // 背景を少しつける
+        backgroundColor: 'transparent',
     },
     // ---------------------------------
     calendarContainer: {
@@ -150,7 +150,6 @@ export const createCalendarStyles = (isDark: boolean, subColor: string): Calenda
         ...shadowStyle, // 影を適用
     },
     fullCalendarContainer: {
-        flex: 1,
         backgroundColor: cardBackgroundColor,
     },
   });
