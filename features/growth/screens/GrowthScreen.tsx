@@ -55,24 +55,11 @@ export default function GrowthScreen() {
   const [tempSeconds, setTempSeconds] = useState(0);
   const [isMuted, setMuted] = useState(false);
   
-  // 遷移状態管理
-  const [isTransitioning, setIsTransitioning] = useState(false);
-  
   // ここを修正: NodeJS.Timeoutの代わりに ReturnType<typeof setInterval> を使用
   const timerIntervalRef = useRef<number | null>(null);
   const startTimeRef = useRef<number>(0);
   const notificationIdRef = useRef<string | null>(null);
 
-  // スムーズな画面遷移関数
-  const smoothTransition = useCallback((callback: () => void, delay: number = 150) => {
-    setIsTransitioning(true);
-    setTimeout(() => {
-      callback();
-      setTimeout(() => {
-        setIsTransitioning(false);
-      }, 50);
-    }, delay);
-  }, []);
 
   // 音声初期化
   useEffect(() => {
@@ -187,11 +174,9 @@ export default function GrowthScreen() {
     setTempHours(hours);
     setTempMinutes(minutes);
     setTempSeconds(seconds);
-    
-    smoothTransition(() => {
-      setDurationPickerVisible(true);
-    });
-  }, [focusDurationSec, smoothTransition]);
+
+    setDurationPickerVisible(true);
+  }, [focusDurationSec]);
 
   const confirmDurationPicker = useCallback(() => {
     const totalSec = tempHours * 3600 + tempMinutes * 60 + tempSeconds;
@@ -210,11 +195,9 @@ export default function GrowthScreen() {
     setFocusDurationSec(totalSec);
     setTimeRemaining(totalSec);
     
-    smoothTransition(() => {
-      setDurationPickerVisible(false);
-      setFocusModeActive(true);
-      setFocusModeStatus('running');
-    }, 100);
+    setDurationPickerVisible(false);
+    setFocusModeActive(true);
+    setFocusModeStatus('running');
     
     // タイマー開始
     startTimeRef.current = Date.now();
@@ -231,7 +214,7 @@ export default function GrowthScreen() {
       },
       trigger: { seconds: totalSec, repeats: false },
     }).then((id) => { notificationIdRef.current = id; });
-  }, [tempHours, tempMinutes, tempSeconds, smoothTransition, t]);
+  }, [tempHours, tempMinutes, tempSeconds, t]);
 
   const pauseFocusMode = useCallback(() => {
     if (timerIntervalRef.current !== null) {
@@ -296,12 +279,10 @@ export default function GrowthScreen() {
     setTempMinutes(minutes);
     setTempSeconds(seconds);
     
-    smoothTransition(() => {
-      setFocusModeStatus('idle');
-      setFocusModeActive(false);
-      setDurationPickerVisible(true);
-    });
-  }, [timeRemaining, smoothTransition]);
+    setFocusModeStatus('idle');
+    setFocusModeActive(false);
+    setDurationPickerVisible(true);
+  }, [timeRemaining]);
 
   const toggleMute = useCallback(() => {
     setMuted(prev => !prev);
@@ -317,13 +298,11 @@ export default function GrowthScreen() {
       notificationIdRef.current = null;
     }
     
-    smoothTransition(() => {
-      setFocusModeStatus('idle');
-      setFocusModeActive(false);
-      setDurationPickerVisible(false);
-      setTimeRemaining(focusDurationSec);
-    });
-  }, [focusDurationSec, smoothTransition]);
+    setFocusModeStatus('idle');
+    setFocusModeActive(false);
+    setDurationPickerVisible(false);
+    setTimeRemaining(focusDurationSec);
+  }, [focusDurationSec]);
 
   const formatTime = (totalSeconds: number) => {
     const hours = Math.floor(totalSeconds / 3600);
@@ -408,17 +387,15 @@ export default function GrowthScreen() {
 
       {!isDurationPickerVisible && !isFocusModeActive && (
         <View style={styles.bottomActions}>
-          <TouchableOpacity 
-            onPress={toggleMute} 
+          <TouchableOpacity
+            onPress={toggleMute}
             style={styles.iconButton}
-            disabled={isTransitioning}
           >
             <Ionicons name={isMuted ? 'volume-mute' : 'volume-high'} size={24} color={tabIconColor} />
           </TouchableOpacity>
           <TouchableOpacity
             onPress={isFocusModeActive ? stopFocusMode : showDurationPicker}
-            style={[styles.focusModeButton, isTransitioning && styles.buttonDisabled]}
-            disabled={isTransitioning}
+            style={styles.focusModeButton}
           >
             <Text style={[styles.focusModeToggleText, { color: '#333' }]}> 
               {isFocusModeActive ? t('growth.focus_mode_button_stop') : t('growth.focus_mode_button_start')} 
@@ -427,7 +404,7 @@ export default function GrowthScreen() {
           <TouchableOpacity
             onPress={() => router.push('/(tabs)/growth/dictionary')}
             style={styles.iconButton}
-            disabled={isFocusModeActive || isTransitioning}
+            disabled={isFocusModeActive}
           >
             <Ionicons name="book" size={24} color={tabIconColor} />
           </TouchableOpacity>
@@ -493,8 +470,5 @@ const styles = StyleSheet.create({
   focusModeToggleText: {
     fontWeight: 'bold',
     fontSize: 18,
-  },
-  buttonDisabled: {
-    opacity: 0.6,
   },
 });
