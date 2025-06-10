@@ -23,7 +23,7 @@ type FocusModeStatus = 'idle' | 'running' | 'paused';
 type ViewMode = 'normal' | 'picker' | 'timer';
 
 export default function GrowthScreen() {
-  const { colorScheme, subColor } = useAppTheme();
+  const { colorScheme, subColor, setTemporaryDarkMode } = useAppTheme();
   const isDark = colorScheme === 'dark';
   const { t } = useTranslation();
   const { width } = useWindowDimensions();
@@ -74,6 +74,15 @@ export default function GrowthScreen() {
     initializeAudio();
   }, []);
 
+  // ピッカーとタイマー画面時に一時的にダークモードを有効にする
+  useEffect(() => {
+    if (viewMode === 'picker' || viewMode === 'timer') {
+      setTemporaryDarkMode(true);
+    } else {
+      setTemporaryDarkMode(false);
+    }
+  }, [viewMode, setTemporaryDarkMode]);
+
   // focusDurationSecが変更されたときにtempの値を更新
   useEffect(() => {
     const hours = Math.floor(focusDurationSec / 3600);
@@ -87,6 +96,11 @@ export default function GrowthScreen() {
   useFocusEffect(
     useCallback(() => {
       reloadTasks();
+      
+      // フォーカスが外れた時に一時的ダークモードを解除（一時的に無効化）
+      // return () => {
+      //   setTemporaryDarkMode(false);
+      // };
     }, [reloadTasks])
   );
 
@@ -349,6 +363,7 @@ export default function GrowthScreen() {
 
   return (
     <View style={styles.container}>
+      
       <GrowthDisplay
         theme={currentTheme}
         asset={currentThemeAsset || { image: PLACEHOLDER_IMAGE_FALLBACK }}

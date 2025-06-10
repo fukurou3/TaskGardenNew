@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, useWindowDimensions, Platform } from 'react-native';
+import React, { useEffect, useCallback, useMemo } from 'react';
+import { View, Text, StyleSheet, Pressable, useWindowDimensions } from 'react-native';
 import WheelPicker from 'react-native-wheely';
 import { useTranslation } from 'react-i18next';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -16,9 +16,6 @@ interface Props {
   onClose: () => void;
   textColor: string;
 }
-
-const HOURS_OPTIONS = Array.from({ length: 24 }, (_, i) => `${i}`);
-const MINUTE_SECOND_OPTIONS = Array.from({ length: 60 }, (_, i) => `${i}`);
 
 const STORAGE_KEY = '@growth_duration_picker';
 
@@ -38,67 +35,46 @@ export default function DurationPickerModal({
   const { width } = useWindowDimensions();
   const pickerWidth = 90;
   
-  const [internalHours, setInternalHours] = useState(hours);
-  const [internalMinutes, setInternalMinutes] = useState(minutes);
-  const [isInitialized, setIsInitialized] = useState(false);
+  // オプション配列をメモ化
+  const hoursOptions = useMemo(() => Array.from({ length: 24 }, (_, i) => `${i}`), []);
+  const minuteOptions = useMemo(() => Array.from({ length: 60 }, (_, i) => `${i}`), []);
   
   // 初期化処理（アプリ起動時に一度だけ実行）
   useEffect(() => {
+    let isMounted = true;
+    
     const initializeDuration = async () => {
-      if (!isInitialized) {
-        try {
-          const saved = await AsyncStorage.getItem(STORAGE_KEY);
-          if (saved) {
-            const { hours: savedHours, minutes: savedMinutes } = JSON.parse(saved);
-            setInternalHours(savedHours);
-            setInternalMinutes(savedMinutes);
-            onChangeHours(savedHours);
-            onChangeMinutes(savedMinutes);
-          }
-        } catch (error) {
-          console.error('Failed to load saved duration:', error);
+      try {
+        const saved = await AsyncStorage.getItem(STORAGE_KEY);
+        if (saved && isMounted) {
+          const { hours: savedHours, minutes: savedMinutes } = JSON.parse(saved);
+          onChangeHours(savedHours);
+          onChangeMinutes(savedMinutes);
         }
-        setIsInitialized(true);
+      } catch (error) {
+        console.error('Failed to load saved duration:', error);
       }
     };
     
     initializeDuration();
-  }, [isInitialized, onChangeHours, onChangeMinutes]);
-  
-  // 外部からの値変更を反映
-  useEffect(() => {
-    if (visible) {
-      setInternalHours(hours);
-      setInternalMinutes(minutes);
-    }
-  }, [visible, hours, minutes]);
-  
-  // 値変更時の処理
-  const handleHoursChange = (val: number) => {
-    setInternalHours(val);
-    onChangeHours(val);
-  };
-  
-  const handleMinutesChange = (val: number) => {
-    setInternalMinutes(val);
-    onChangeMinutes(val);
-  };
+    
+    return () => {
+      isMounted = false;
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   
   // 確定時に値を保存
-  const handleConfirm = async () => {
+  const handleConfirm = useCallback(async () => {
     try {
       await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({
-        hours: internalHours,
-        minutes: internalMinutes
+        hours,
+        minutes
       }));
     } catch (error) {
       console.error('Failed to save duration:', error);
     }
-    // 変更が確実に親に反映されるよう、最新の値を通知
-    onChangeHours(internalHours);
-    onChangeMinutes(internalMinutes);
     onConfirm();
-  };
+  }, [hours, minutes, onConfirm]);
 
   // react-native-modalを使わず、直接条件付きレンダリング
   if (!visible) return null;
@@ -121,9 +97,10 @@ export default function DurationPickerModal({
             <View style={styles.pickerGroup}>
               <View style={styles.pickerContainer}>
                 <WheelPicker
-                  options={HOURS_OPTIONS}
-                  selectedIndex={internalHours}
-                  onChange={handleHoursChange}
+                  key={visible ? 'hours-visible' : 'hours-hidden'}
+                  options={hoursOptions}
+                  selectedIndex={hours}
+                  onChange={onChangeHours}
                   itemHeight={60}
                   visibleRest={1}
                   containerStyle={{ 
@@ -152,9 +129,10 @@ export default function DurationPickerModal({
             <View style={styles.pickerGroup}>
               <View style={styles.pickerContainer}>
                 <WheelPicker
-                  options={MINUTE_SECOND_OPTIONS}
-                  selectedIndex={internalMinutes}
-                  onChange={handleMinutesChange}
+                  key={visible ? 'minutes-visible' : 'minutes-hidden'}
+                  options={minuteOptions}
+                  selectedIndex={minutes}
+                  onChange={onChangeMinutes}
                   itemHeight={60}
                   visibleRest={1}
                   containerStyle={{ 
