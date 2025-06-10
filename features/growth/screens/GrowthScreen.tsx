@@ -190,14 +190,14 @@ export default function GrowthScreen() {
       return;
     }
     
-    // 時間を更新してからタイマーを開始
+    // 時間を更新
     setFocusDurationSec(totalSec);
     setTimeRemaining(totalSec);
     
-    // 即座にタイマー画面へ遷移
+    // タイマー画面へ遷移してタイマーを開始
     setViewMode('timer');
-    setFocusModeStatus('running');
     
+    // タイマー開始処理
     startTimeRef.current = Date.now();
     if (notificationIdRef.current) {
       Notifications.cancelScheduledNotificationAsync(notificationIdRef.current).catch(() => {});
@@ -212,6 +212,11 @@ export default function GrowthScreen() {
       },
       trigger: { seconds: totalSec, repeats: false },
     }).then((id) => { notificationIdRef.current = id; });
+    
+    // 最後にタイマーを開始（状態更新後に実行）
+    setTimeout(() => {
+      setFocusModeStatus('running');
+    }, 100);
   }, [tempHours, tempMinutes, tempSeconds, t]);
 
   const pauseFocusMode = useCallback(() => {
