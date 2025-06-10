@@ -78,10 +78,9 @@ export default function GrowthScreen() {
   useEffect(() => {
     const hours = Math.floor(focusDurationSec / 3600);
     const minutes = Math.floor((focusDurationSec % 3600) / 60);
-    const seconds = focusDurationSec % 60;
     setTempHours(hours);
     setTempMinutes(minutes);
-    setTempSeconds(seconds);
+    setTempSeconds(0); // 秒数は常に0で初期化
   }, [focusDurationSec]);
 
   // GrowthScreenにフォーカスされた時にタスクを再読み込み
@@ -112,7 +111,13 @@ export default function GrowthScreen() {
     Alert.alert(
       t('growth.focus_mode_completed_title'),
       t('growth.focus_mode_completed_message', { minutes: Math.ceil(focusDurationSec / 60) }),
-      [{ text: t('common.ok') }]
+      [{ 
+        text: t('common.ok'),
+        onPress: () => {
+          // アラート後にタイマーを元の設定値にリセット
+          setTimeRemaining(focusDurationSec);
+        }
+      }]
     );
   }, [focusDurationSec, isMuted, t]);
 
@@ -174,12 +179,17 @@ export default function GrowthScreen() {
   }, [focusDurationSec, t]);
 
   const showDurationPicker = useCallback(() => {
-    // 現在の設定値を使用
+    // ピッカー表示前に現在の設定値を同期、秒数は0にリセット
+    const hours = Math.floor(focusDurationSec / 3600);
+    const minutes = Math.floor((focusDurationSec % 3600) / 60);
+    setTempHours(hours);
+    setTempMinutes(minutes);
+    setTempSeconds(0);
     setViewMode('picker');
-  }, []);
+  }, [focusDurationSec]);
 
   const confirmDurationPicker = useCallback(() => {
-    const totalSec = tempHours * 3600 + tempMinutes * 60 + tempSeconds;
+    const totalSec = tempHours * 3600 + tempMinutes * 60; // 秒数は含めない
     
     if (totalSec < 60) {
       Alert.alert(
@@ -216,7 +226,7 @@ export default function GrowthScreen() {
     setTimeRemaining(totalSec);
     setViewMode('timer');
     setFocusModeStatus('running');
-  }, [tempHours, tempMinutes, tempSeconds, t]);
+  }, [tempHours, tempMinutes, t]);
 
   const pauseFocusMode = useCallback(() => {
     if (timerIntervalRef.current !== null) {
@@ -260,6 +270,13 @@ export default function GrowthScreen() {
     setFocusModeStatus('idle');
     setViewMode('normal');
     setTimeRemaining(focusDurationSec);
+    
+    // ピッカーの値も元に戻し、秒数は0にリセット
+    const hours = Math.floor(focusDurationSec / 3600);
+    const minutes = Math.floor((focusDurationSec % 3600) / 60);
+    setTempHours(hours);
+    setTempMinutes(minutes);
+    setTempSeconds(0);
   }, [focusDurationSec]);
 
   const goBackToPicker = useCallback(() => {
@@ -272,18 +289,16 @@ export default function GrowthScreen() {
       notificationIdRef.current = null;
     }
     
-    // 修正: 現在の残り時間をピッカーに反映
-    const targetTime = timeRemaining > 0 ? timeRemaining : focusDurationSec;
-    const hours = Math.floor(targetTime / 3600);
-    const minutes = Math.floor((targetTime % 3600) / 60);
-    const seconds = targetTime % 60;
+    // 修正: 元の設定値（focusDurationSec）を基準にピッカーの値を設定
+    const hours = Math.floor(focusDurationSec / 3600);
+    const minutes = Math.floor((focusDurationSec % 3600) / 60);
     setTempHours(hours);
     setTempMinutes(minutes);
-    setTempSeconds(seconds);
+    setTempSeconds(0); // 秒数は常に0にリセット
     
     setFocusModeStatus('idle');
     setViewMode('picker');
-  }, [timeRemaining, focusDurationSec]);
+  }, [focusDurationSec]);
 
   const toggleMute = useCallback(() => {
     setMuted(prev => !prev);
@@ -304,13 +319,12 @@ export default function GrowthScreen() {
     setViewMode('normal');
     setTimeRemaining(focusDurationSec);
     
-    // ピッカーの値も初期値に戻す
+    // ピッカーの値も初期値に戻すが、秒数は0にリセット
     const hours = Math.floor(focusDurationSec / 3600);
     const minutes = Math.floor((focusDurationSec % 3600) / 60);
-    const seconds = focusDurationSec % 60;
     setTempHours(hours);
     setTempMinutes(minutes);
-    setTempSeconds(seconds);
+    setTempSeconds(0); // 秒数は常に0にリセット
   }, [focusDurationSec]);
 
   const formatTime = (totalSeconds: number) => {

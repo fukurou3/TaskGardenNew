@@ -105,6 +105,9 @@ export default function DurationPickerModal({
 
   return (
     <>
+      {/* 薄暗いオーバーレイ */}
+      <View style={styles.dimOverlay} />
+      
       {/* 背景のオーバーレイ */}
       <Pressable 
         style={styles.backdrop} 
@@ -194,6 +197,11 @@ export default function DurationPickerModal({
 }
 
 const styles = StyleSheet.create({
+  dimOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    zIndex: 998,
+  },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'transparent',

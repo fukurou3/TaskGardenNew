@@ -52,6 +52,7 @@ export default function FocusModeOverlay({
 
   return (
     <View style={styles.overlay}>
+      <View style={styles.dimOverlay} />
       <View style={styles.contentContainer}>
         <TouchableOpacity 
           onPress={onToggleMute} 
@@ -146,12 +147,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     zIndex: 10,
   },
+  dimOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    zIndex: 1,
+  },
   contentContainer: {
     backgroundColor: 'transparent',
     justifyContent: 'center',
     alignItems: 'center',
     width: '100%',
     height: '100%',
+    zIndex: 2,
   },
   timerContainer: {
     alignItems: 'center',
