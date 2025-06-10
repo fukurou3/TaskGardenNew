@@ -54,7 +54,7 @@ export default function FocusModeOverlay({
 
     const applyNavBar = async (darken: boolean) => {
       if (darken) {
-        await NavigationBar.setBackgroundColorAsync('rgba(0,0,0,0.5)');
+        await NavigationBar.setBackgroundColorAsync('#00000080');
         await NavigationBar.setButtonStyleAsync('light');
       } else {
         const defaultColor = isDark ? '#000000' : '#ffffff';
