@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
-import { StyleSheet } from 'react-native';
-import { Canvas, Image as SkiaImage, useImage } from '@shopify/react-native-skia';
-import Animated, { useSharedValue, withTiming, Easing, useAnimatedStyle, runOnJS } from 'react-native-reanimated';
+import { StyleSheet, View } from 'react-native';
+import { Canvas, Circle, RoundedRect, LinearGradient, vec, useSharedValueEffect } from '@shopify/react-native-skia';
+import Animated, { useSharedValue, withTiming, withSequence, withDelay, Easing, useAnimatedStyle, runOnJS, interpolate, useDerivedValue } from 'react-native-reanimated';
 
 interface StartupAnimationProps {
   onAnimationEnd?: () => void;
@@ -9,36 +9,95 @@ interface StartupAnimationProps {
 
 export default function StartupAnimation({ onAnimationEnd }: StartupAnimationProps) {
   const progress = useSharedValue(0);
-  const image = useImage(require('@/assets/splash-icon.png'));
+  const circleProgress = useSharedValue(0);
+  const rectProgress = useSharedValue(0);
+  
+  const animatedOpacity = useDerivedValue(() => 
+    interpolate(progress.value, [0, 0.3, 0.7, 1], [0, 1, 1, 0])
+  );
+  
+  const animatedScale = useDerivedValue(() => 
+    interpolate(progress.value, [0, 0.5, 1], [0.3, 1.2, 1])
+  );
 
   useEffect(() => {
-    progress.value = withTiming(1, { duration: 1000, easing: Easing.out(Easing.cubic) }, (finished) => {
-      if (finished && onAnimationEnd) {
-        runOnJS(onAnimationEnd)();
+    circleProgress.value = withDelay(200, withTiming(1, { duration: 800, easing: Easing.out(Easing.cubic) }));
+    rectProgress.value = withDelay(400, withTiming(1, { duration: 600, easing: Easing.out(Easing.cubic) }));
+    
+    progress.value = withSequence(
+      withTiming(0.7, { duration: 1200, easing: Easing.out(Easing.cubic) }),
+      withDelay(300, withTiming(1, { duration: 400, easing: Easing.in(Easing.cubic) }))
+    );
+
+    const timeout = setTimeout(() => {
+      if (onAnimationEnd) {
+        onAnimationEnd();
       }
-    });
+    }, 2000);
+
+    return () => clearTimeout(timeout);
   }, []);
 
   const animatedStyle = useAnimatedStyle(() => ({
-    opacity: progress.value,
-    transform: [{ scale: progress.value }],
+    opacity: animatedOpacity.value,
+    transform: [{ scale: animatedScale.value }],
   }));
 
-  if (!image) return null;
-
   return (
-    <Animated.View style={[StyleSheet.absoluteFill, styles.center, animatedStyle]} pointerEvents="none">
-      <Canvas style={{ width: 180, height: 180 }}>
-        <SkiaImage image={image} x={0} y={0} width={180} height={180} fit="contain" />
-      </Canvas>
-    </Animated.View>
+    <View style={[StyleSheet.absoluteFill, styles.container]} pointerEvents="box-none">
+      <Animated.View style={[styles.center, animatedStyle]}>
+        <Canvas style={{ width: 200, height: 200 }}>
+          <LinearGradient
+            start={vec(0, 0)}
+            end={vec(200, 200)}
+            colors={['#4A90E2', '#7B68EE', '#9370DB']}
+          />
+          
+          <Circle
+            cx={100}
+            cy={100}
+            r={circleProgress}
+            color="rgba(255, 255, 255, 0.3)"
+            style="stroke"
+            strokeWidth={3}
+          />
+          
+          <Circle
+            cx={100}
+            cy={100}
+            r={circleProgress}
+            color="rgba(255, 255, 255, 0.1)"
+          />
+          
+          <RoundedRect
+            x={70 + (30 - 30 * rectProgress.value)}
+            y={70 + (30 - 30 * rectProgress.value)}
+            width={60 * rectProgress.value}
+            height={60 * rectProgress.value}
+            r={8}
+            color="rgba(255, 255, 255, 0.8)"
+          />
+          
+          <Circle
+            cx={100}
+            cy={100}
+            r={20 * circleProgress.value}
+            color="rgba(255, 255, 255, 0.9)"
+          />
+        </Canvas>
+      </Animated.View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  container: {
+    backgroundColor: 'rgba(74, 144, 226, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   center: {
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#ffffff',
   },
 });

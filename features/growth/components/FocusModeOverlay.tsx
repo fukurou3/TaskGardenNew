@@ -167,7 +167,6 @@ const styles = StyleSheet.create({
   contentContainer: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    backdropFilter: 'blur(10px)',
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 10,
@@ -175,12 +174,7 @@ const styles = StyleSheet.create({
   timerContainer: {
     alignItems: 'center',
     padding: 40,
-    padding: 40,
   },
-  circularTimerContainer: {
-    position: 'relative',
-    alignItems: 'center',
-    justifyContent: 'center',
   circularTimerContainer: {
     position: 'relative',
     alignItems: 'center',
@@ -243,18 +237,6 @@ const styles = StyleSheet.create({
   },
   audioButton: {
     position: 'absolute',
-    top: 60,
-    right: 30,
-    padding: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
-    borderRadius: 30,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 1,
     top: 60,
     right: 30,
     padding: 16,

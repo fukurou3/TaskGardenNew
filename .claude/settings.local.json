@@ -17,7 +17,9 @@
       "Bash(npx expo run:android:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(git config:*)"
+      "Bash(git config:*)",
+      "Bash(npx tsc:*)",
+      "Bash(timeout 15 npx expo start --clear)"
     ],
     "deny": []
   }

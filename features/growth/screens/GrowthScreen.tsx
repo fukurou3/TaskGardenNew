@@ -133,9 +133,6 @@ export default function GrowthScreen() {
       }
     };
   }, [focusModeStatus, handleFocusModeCompletion]);
-  }, [focusModeStatus, handleFocusModeCompletion]);
-
-
 
   const startFocusMode = useCallback((duration?: number) => {
     const focusSec = duration ?? focusDurationSec;
@@ -281,7 +278,6 @@ export default function GrowthScreen() {
           StyleSheet.absoluteFillObject,
           {
             backgroundColor: 'rgba(0, 0, 0, 0.6)',
-            backdropFilter: 'blur(10px)',
             zIndex: 5,
           }
         ]} />
@@ -300,7 +296,6 @@ export default function GrowthScreen() {
         onStart={startFocusMode}
         onPause={pauseFocusMode}
         onResume={resumeFocusMode}
-        onStop={stopFocusMode}
         onStop={stopFocusMode}
         onToggleMute={toggleMute}
         onRestart={cancelTimer}
