@@ -30,27 +30,10 @@ export default function ImmersiveModal({
         StatusBar.setHidden(true, 'fade');
       }
       
-      // 表示アニメーション
-      Animated.parallel([
-        Animated.timing(overlayAnim, {
-          toValue: overlayOpacity,
-          duration: 1000,
-          easing: Easing.out(Easing.quad),
-          useNativeDriver: false,
-        }),
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 1000,
-          easing: Easing.out(Easing.quad),
-          useNativeDriver: true,
-        }),
-        Animated.timing(scaleAnim, {
-          toValue: 1,
-          duration: 1000,
-          easing: Easing.out(Easing.quad),
-          useNativeDriver: true,
-        }),
-      ]).start();
+      // 表示アニメーション（即座に表示）
+      overlayAnim.setValue(overlayOpacity);
+      fadeAnim.setValue(1);
+      scaleAnim.setValue(1);
     } else {
       // プラットフォーム固有の復元処理
       if (Platform.OS === 'android') {

@@ -54,11 +54,7 @@ export default function FocusModeOverlay({
   // LayeredModalが自動でオーバーレイ管理するため削除
 
   return (
-    <ImmersiveModal
-      visible={visible}
-      overlayOpacity={0.75}
-    >
-      <View style={styles.contentContainer}>
+    <View style={styles.contentContainer}>
         <TouchableOpacity 
           onPress={onToggleMute} 
           style={[styles.audioButton, { top: 60 + insets.top }]}
@@ -141,7 +137,6 @@ export default function FocusModeOverlay({
           </View>
         </View>
       </View>
-    </ImmersiveModal>
   );
 }
 

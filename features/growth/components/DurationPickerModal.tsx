@@ -96,11 +96,7 @@ export default function DurationPickerModal({
   }, [hours, minutes, onConfirm]);
 
   return (
-    <ImmersiveModal
-      visible={visible}
-      overlayOpacity={0.75}
-    >
-      <View style={styles.container}>
+    <View style={styles.container}>
         <View style={styles.row}>
           <View style={styles.pickerGroup}>
             <View style={styles.pickerContainer}>
@@ -177,7 +173,6 @@ export default function DurationPickerModal({
           </Pressable>
         </View>
       </View>
-    </ImmersiveModal>
   );
 }
 

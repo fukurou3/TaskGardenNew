@@ -16,6 +16,7 @@ import ThemeSelectionModal from '../components/ThemeSelectionModal';
 import MenuModal from '../components/MenuModal';
 import DurationPickerModal from '../components/DurationPickerModal';
 import FocusModeOverlay from '../components/FocusModeOverlay';
+import ImmersiveModal from '@/components/ImmersiveModal';
 import TimerSoundManager from '@/lib/TimerSoundManager';
 
 
@@ -455,23 +456,46 @@ export default function GrowthScreen() {
           asset={currentThemeAsset || { image: PLACEHOLDER_IMAGE_FALLBACK }}
         />
 
-        <FocusModeOverlay
-          visible={viewMode === 'timer'}
-          width={width}
-          subColor={subColor}
-          isDark={isDark}
-          isMuted={isMuted}
-          focusModeStatus={focusModeStatus}
-          timeRemaining={timeRemaining}
-          focusDurationSec={focusDurationSec}
-          formatTime={formatTime}
-          onStart={startFocusMode}
-          onPause={pauseFocusMode}
-          onResume={resumeFocusMode}
-          onStop={stopFocusMode}
-          onToggleMute={toggleMute}
-          onRestart={goBackToPicker}
-        />
+        {/* タイマーモーダル（ピッカーとタイマーの両方を包含） */}
+        <ImmersiveModal
+          visible={viewMode === 'picker' || viewMode === 'timer'}
+          overlayOpacity={0.75}
+        >
+          {viewMode === 'timer' && (
+            <FocusModeOverlay
+              visible={true}
+              width={width}
+              subColor={subColor}
+              isDark={isDark}
+              isMuted={isMuted}
+              focusModeStatus={focusModeStatus}
+              timeRemaining={timeRemaining}
+              focusDurationSec={focusDurationSec}
+              formatTime={formatTime}
+              onStart={startFocusMode}
+              onPause={pauseFocusMode}
+              onResume={resumeFocusMode}
+              onStop={stopFocusMode}
+              onToggleMute={toggleMute}
+              onRestart={goBackToPicker}
+            />
+          )}
+          
+          {viewMode === 'picker' && (
+            <DurationPickerModal
+              visible={true}
+              hours={tempHours}
+              minutes={tempMinutes}
+              seconds={tempSeconds}
+              onChangeHours={(val) => setTempHours(val)}
+              onChangeMinutes={(val) => setTempMinutes(val)}
+              onChangeSeconds={(val) => setTempSeconds(val)}
+              onConfirm={confirmDurationPicker}
+              onClose={cancelTimer}
+              textColor="#fff"
+            />
+          )}
+        </ImmersiveModal>
 
         <ThemeSelectionModal
           visible={isThemeSelectionModalVisible}
@@ -519,19 +543,6 @@ export default function GrowthScreen() {
         )}
       </Animated.View>
 
-      {/* ピッカーモーダル */}
-      <DurationPickerModal
-        visible={viewMode === 'picker'}
-        hours={tempHours}
-        minutes={tempMinutes}
-        seconds={tempSeconds}
-        onChangeHours={(val) => setTempHours(val)}
-        onChangeMinutes={(val) => setTempMinutes(val)}
-        onChangeSeconds={(val) => setTempSeconds(val)}
-        onConfirm={confirmDurationPicker}
-        onClose={cancelTimer}
-        textColor="#fff"
-      />
     </View>
   );
 }
