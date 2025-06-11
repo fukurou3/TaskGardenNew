@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { View, StyleSheet, Animated, Easing, Platform, StatusBar, Modal } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import * as NavigationBar from 'expo-navigation-bar';
+import { SystemUIManager } from '@/utils/SystemUIManager';
 
 interface ImmersiveModalProps {
   visible: boolean;
@@ -19,17 +19,12 @@ export default function ImmersiveModal({
   const scaleAnim = useRef(new Animated.Value(0.9)).current;
   const overlayAnim = useRef(new Animated.Value(0)).current;
   
-  // Androidでタブナビゲーションエリアもカバーするための画面サイズ取得
-  const screenData = Dimensions.get('screen');
-  const windowData = Dimensions.get('window');
   
   useEffect(() => {
     if (visible) {
       // プラットフォーム固有の没入処理
       if (Platform.OS === 'android') {
-        // Android: システムUIは非表示にしない（タブナビゲーションエリアにも薄暗い効果を適用するため）
-        // NavigationBar.setVisibilityAsync('hidden');
-        // StatusBar.setHidden(true, 'fade');
+        SystemUIManager.enableModalFullScreen().catch(() => {});
       } else {
         // iOS: ステータスバーのみ非表示
         StatusBar.setHidden(true, 'fade');
@@ -59,9 +54,7 @@ export default function ImmersiveModal({
     } else {
       // プラットフォーム固有の復元処理
       if (Platform.OS === 'android') {
-        // Android: システムUIは表示のまま維持
-        // NavigationBar.setVisibilityAsync('visible');
-        // StatusBar.setHidden(false, 'fade');
+        SystemUIManager.disableFullScreenMode().catch(() => {});
       } else {
         // iOS: ステータスバーを復元
         StatusBar.setHidden(false, 'fade');
@@ -94,7 +87,7 @@ export default function ImmersiveModal({
   if (!visible) return null;
 
   return (
-    <>
+    <Modal visible={visible} transparent animationType="none" statusBarTranslucent>
       {/* フルスクリーンオーバーレイ */}
       <Animated.View
         style={[
@@ -123,7 +116,7 @@ export default function ImmersiveModal({
           {children}
         </View>
       </Animated.View>
-    </>
+    </Modal>
   );
 }
 
