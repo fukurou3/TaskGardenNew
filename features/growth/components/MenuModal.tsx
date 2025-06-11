@@ -1,6 +1,7 @@
 import React from 'react';
-import { Modal, Pressable, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { Pressable, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import ImmersiveModal from '@/components/ImmersiveModal';
 
 interface Props {
   visible: boolean;
@@ -14,7 +15,7 @@ interface Props {
 export default function MenuModal({ visible, onSelectDictionary, onSelectGacha, onSelectStore, onSelectTheme, onClose }: Props) {
   const { t } = useTranslation();
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <ImmersiveModal visible={visible} overlayOpacity={0.6}>
       <Pressable style={styles.overlay} onPress={onClose}>
         <Pressable style={styles.content} onPress={(e) => e.stopPropagation()}>
           <TouchableOpacity style={styles.item} onPress={onSelectTheme}>
@@ -31,12 +32,12 @@ export default function MenuModal({ visible, onSelectDictionary, onSelectGacha, 
           </TouchableOpacity>
         </Pressable>
       </Pressable>
-    </Modal>
+    </ImmersiveModal>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
+  overlay: { flex: 1, backgroundColor: 'transparent', justifyContent: 'center', alignItems: 'center' },
   content: { backgroundColor: '#fff', borderRadius: 10, padding: 20, width: '90%', maxHeight: '80%' },
   item: { paddingVertical: 10 },
   itemText: { fontSize: 16, textAlign: 'center', paddingVertical: 5 },

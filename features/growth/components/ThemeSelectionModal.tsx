@@ -1,8 +1,9 @@
 import React from 'react';
-import { Modal, Pressable, View, Text, StyleSheet, FlatList, TouchableOpacity, Image } from 'react-native';
+import { Pressable, View, Text, StyleSheet, FlatList, TouchableOpacity, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Theme } from '../themes/types';
 import { useTranslation } from 'react-i18next';
+import ImmersiveModal from '@/components/ImmersiveModal';
 
 interface Props {
   visible: boolean;
@@ -15,7 +16,7 @@ interface Props {
 export default function ThemeSelectionModal({ visible, themes, selectedId, onSelect, onClose }: Props) {
   const { t } = useTranslation();
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <ImmersiveModal visible={visible} overlayOpacity={0.75}>
       <Pressable style={styles.overlay} onPress={onClose}>
         <Pressable style={styles.content} onPress={(e) => e.stopPropagation()}>
           <Text style={styles.title}>{t('growth.select_theme')}</Text>
@@ -45,12 +46,12 @@ export default function ThemeSelectionModal({ visible, themes, selectedId, onSel
           </TouchableOpacity>
         </Pressable>
       </Pressable>
-    </Modal>
+    </ImmersiveModal>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'center', alignItems: 'center' },
+  overlay: { flex: 1, backgroundColor: 'transparent', justifyContent: 'center', alignItems: 'center' },
   content: { backgroundColor: '#fff', borderRadius: 10, padding: 20, width: '90%', maxHeight: '80%' },
   title: { fontSize: 20, fontWeight: 'bold', marginBottom: 20, textAlign: 'center', color: '#333' },
   optionsContainer: { justifyContent: 'space-around', paddingBottom: 20 },

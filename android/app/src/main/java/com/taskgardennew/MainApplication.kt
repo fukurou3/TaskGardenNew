@@ -1,4 +1,4 @@
-package com.fukuroulu.TaskGardenNew
+package com.taskgardennew
 
 import android.app.Application
 import android.content.res.Configuration
@@ -15,6 +15,7 @@ import com.facebook.soloader.SoLoader
 
 import expo.modules.ApplicationLifecycleDispatcher
 import expo.modules.ReactNativeHostWrapper
+import com.hudl.rn.systembars.AndroidSystemBarsPackage
 
 class MainApplication : Application(), ReactApplication {
 
@@ -24,8 +25,7 @@ class MainApplication : Application(), ReactApplication {
           override fun getPackages(): List<ReactPackage> {
             val packages = PackageList(this).packages
             // Packages that cannot be autolinked yet can be added manually here, for example:
-            // packages.add(MyReactNativePackage())
-            packages.add(SystemOverlayPackage())
+            packages.add(AndroidSystemBarsPackage())
             return packages
           }
 

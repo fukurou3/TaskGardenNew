@@ -24,7 +24,10 @@ export default function ImmersiveModal({
     if (visible) {
       // プラットフォーム固有の没入処理
       if (Platform.OS === 'android') {
-        SystemUIManager.enableModalFullScreen().catch(() => {});
+        // react-native-system-bars を使用したImmersive Mode
+        SystemUIManager.enableModalFullScreen().catch((error) => {
+          console.warn('Failed to enable immersive mode:', error);
+        });
       } else {
         // iOS: ステータスバーのみ非表示
         StatusBar.setHidden(true, 'fade');
@@ -54,7 +57,10 @@ export default function ImmersiveModal({
     } else {
       // プラットフォーム固有の復元処理
       if (Platform.OS === 'android') {
-        SystemUIManager.disableFullScreenMode().catch(() => {});
+        // Immersive Mode を無効化
+        SystemUIManager.disableModalFullScreen().catch((error) => {
+          console.warn('Failed to disable immersive mode:', error);
+        });
       } else {
         // iOS: ステータスバーを復元
         StatusBar.setHidden(false, 'fade');

@@ -1,5 +1,5 @@
-import { Platform, NativeModules } from 'react-native';
-import * as NavigationBar from 'expo-navigation-bar';
+import { Platform } from 'react-native';
+import AndroidSystemBars from 'react-native-system-bars';
 
 export class SystemUIManager {
   // フルスクリーンモードを有効にする
@@ -7,20 +7,8 @@ export class SystemUIManager {
     if (Platform.OS !== 'android') return;
     
     try {
-      // expo-navigation-barを使った設定
-      await NavigationBar.setBackgroundColorAsync('transparent');
-      await NavigationBar.setPositionAsync('absolute');
-      await NavigationBar.setBehaviorAsync('overlay-swipe');
-      await NavigationBar.setVisibilityAsync('hidden');
-      
-      // ナビゲーションバーを完全に非表示にする
-      if (Platform.Version >= 30) { // Android 11+
-        // 新しいAPI使用 (MainActivity側で処理)
-        console.log('Using Android 11+ full screen mode');
-      } else {
-        // 古いシステムUI フラグを使用
-        console.log('Using legacy system UI flags');
-      }
+      AndroidSystemBars.enableFullScreenMode('immersive', true);
+      console.log('Full screen mode enabled with react-native-system-bars');
     } catch (error) {
       console.error('Failed to enable full screen mode:', error);
     }
@@ -31,33 +19,43 @@ export class SystemUIManager {
     if (Platform.OS !== 'android') return;
     
     try {
-      await NavigationBar.setBackgroundColorAsync('#ffffff');
-      await NavigationBar.setPositionAsync('relative');
-      await NavigationBar.setBehaviorAsync('inset-swipe');
-      await NavigationBar.setVisibilityAsync('visible');
+      AndroidSystemBars.clearFlags();
+      console.log('Full screen mode disabled');
     } catch (error) {
       console.error('Failed to disable full screen mode:', error);
     }
   }
   
-  // モーダル表示時の特別な設定
+  // モーダル表示時の特別な設定（Immersive Mode）
   static async enableModalFullScreen(): Promise<void> {
     if (Platform.OS !== 'android') return;
     
     try {
-      // モーダル専用の完全フルスクリーン設定
-      await NavigationBar.setBackgroundColorAsync('rgba(0, 0, 0, 0.01)'); // 完全透明ではなく微小値
-      await NavigationBar.setPositionAsync('absolute');
-      await NavigationBar.setBehaviorAsync('overlay-swipe');
-      await NavigationBar.setVisibilityAsync('hidden');
-      
-      // ナビゲーションバーボタンを隠す（Android 11+）
-      if (Platform.Version >= 30) {
-        // ネイティブ側でWindowInsetsControllerを使用
-        console.log('Enabling modal full screen for Android 11+');
-      }
+      // 没入モードでシステムバーを完全に隠す（sticky-immersiveでより確実に）
+      AndroidSystemBars.enableFullScreenMode('sticky-immersive', true);
+      console.log('Modal immersive mode enabled');
     } catch (error) {
       console.error('Failed to enable modal full screen:', error);
+      // フォールバック: より基本的な方法を試す
+      try {
+        AndroidSystemBars.hideStatusAndNavigationBars();
+        console.log('Fallback: hideStatusAndNavigationBars used');
+      } catch (fallbackError) {
+        console.error('Fallback also failed:', fallbackError);
+      }
+    }
+  }
+  
+  // モーダル終了時の復元
+  static async disableModalFullScreen(): Promise<void> {
+    if (Platform.OS !== 'android') return;
+    
+    try {
+      // システムバーを表示に戻す
+      AndroidSystemBars.clearFlags();
+      console.log('Modal immersive mode disabled');
+    } catch (error) {
+      console.error('Failed to disable modal full screen:', error);
     }
   }
 }
