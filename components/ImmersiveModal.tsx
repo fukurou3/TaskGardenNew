@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, StyleSheet, Animated, Easing, Platform, StatusBar, Modal } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SystemUIManager } from '@/utils/SystemUIManager';
@@ -18,10 +18,13 @@ export default function ImmersiveModal({
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.9)).current;
   const overlayAnim = useRef(new Animated.Value(0)).current;
+  const [shouldRender, setShouldRender] = useState(false);
   
   
   useEffect(() => {
     if (visible) {
+      setShouldRender(true);
+      
       // プラットフォーム固有の没入処理
       if (Platform.OS === 'android') {
         SystemUIManager.enableModalFullScreen().catch(() => {});
@@ -30,10 +33,27 @@ export default function ImmersiveModal({
         StatusBar.setHidden(true, 'fade');
       }
       
-      // 表示アニメーション（即座に表示）
-      overlayAnim.setValue(overlayOpacity);
-      fadeAnim.setValue(1);
-      scaleAnim.setValue(1);
+      // 表示アニメーション（フェードイン）
+      Animated.parallel([
+        Animated.timing(overlayAnim, {
+          toValue: overlayOpacity,
+          duration: 300,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: false,
+        }),
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 300,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(scaleAnim, {
+          toValue: 1,
+          duration: 300,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ]).start();
     } else {
       // プラットフォーム固有の復元処理
       if (Platform.OS === 'android') {
@@ -43,7 +63,7 @@ export default function ImmersiveModal({
         StatusBar.setHidden(false, 'fade');
       }
       
-      // 非表示アニメーション
+      // 非表示アニメーション（フェードアウト）
       Animated.parallel([
         Animated.timing(overlayAnim, {
           toValue: 0,
@@ -63,11 +83,13 @@ export default function ImmersiveModal({
           easing: Easing.in(Easing.quad),
           useNativeDriver: true,
         }),
-      ]).start();
+      ]).start(() => {
+        setShouldRender(false);
+      });
     }
   }, [visible, overlayOpacity, fadeAnim, scaleAnim, overlayAnim]);
 
-  if (!visible) return null;
+  if (!shouldRender) return null;
 
   return (
     <Modal visible={visible} transparent animationType="none" statusBarTranslucent>

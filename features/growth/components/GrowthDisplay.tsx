@@ -19,15 +19,7 @@ export default function GrowthDisplay({ theme, asset }: Props) {
 
   return (
     <View style={[styles.container, { width, height }]}>
-      <View style={styles.imageContainer}>
-        {currentThemeImage && (
-          <Image 
-            source={currentThemeImage} 
-            style={[styles.image, { width, height }]} 
-            resizeMode="cover" 
-          />
-        )}
-      </View>
+      {/* 背景画像は親コンポーネントで管理するため、ここでは透明 */}
     </View>
   );
 }
@@ -35,15 +27,6 @@ export default function GrowthDisplay({ theme, asset }: Props) {
 const styles = StyleSheet.create({
   container: { 
     flex: 1, 
-    backgroundColor: '#e8e8e8' 
-  },
-  imageContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    position: 'relative',
-  },
-  image: { 
-    flex: 1,
+    backgroundColor: 'transparent' 
   },
 });

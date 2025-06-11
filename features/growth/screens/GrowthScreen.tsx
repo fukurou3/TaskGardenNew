@@ -18,6 +18,7 @@ import DurationPickerModal from '../components/DurationPickerModal';
 import FocusModeOverlay from '../components/FocusModeOverlay';
 import ImmersiveModal from '@/components/ImmersiveModal';
 import TimerSoundManager from '@/lib/TimerSoundManager';
+import { Image } from 'react-native';
 
 
 type FocusModeStatus = 'idle' | 'running' | 'paused';
@@ -39,7 +40,7 @@ export default function GrowthScreen() {
   const { colorScheme, subColor } = useAppTheme();
   const isDark = colorScheme === 'dark';
   const { t } = useTranslation();
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const router = useRouter();
   const { view } = useLocalSearchParams<{ view?: string }>();
   const isViewMode = view === 'true';
@@ -70,13 +71,14 @@ export default function GrowthScreen() {
   // 統合されたビューモード管理
   const [viewMode, setViewMode] = useState<ViewMode>('normal');
   const [isTransitioning, setIsTransitioning] = useState(false);
+  const [modalVisible, setModalVisible] = useState(false);
   
   // アニメーション用のAnimated.Value
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const overlayFadeAnim = useRef(new Animated.Value(0)).current;
   
-  const timerIntervalRef = useRef<number | null>(null);
+  const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const startTimeRef = useRef<number>(0);
   const notificationIdRef = useRef<string | null>(null);
 
@@ -117,29 +119,23 @@ export default function GrowthScreen() {
     console.log(`Animation transition: ${from} -> ${to}`);
     setIsTransitioning(true);
     
-    // 成長画面 → ピッカーのみフェードイン効果、モーダル⇔タイマー間は即座遷移
-    const shouldAnimate = from === 'normal' && to === 'picker';
-    const isModalTimerTransition = (from === 'picker' && to === 'timer') || (from === 'timer' && to === 'picker');
-    const duration = shouldAnimate && !isModalTimerTransition ? 0 : 0; // すべて即座遷移
-    console.log(`Animation duration: ${duration}ms`);
-    
-    if (duration === 0) {
-      // 即座遷移
+    // モーダルの表示/非表示管理
+    if (from === 'normal' && (to === 'picker' || to === 'timer')) {
+      // normal → picker/timer: モーダル表示
+      setModalVisible(true);
       setViewMode(to);
-      if (callback) callback();
-      console.log(`Immediate transition completed: ${from} -> ${to}`);
-      setIsTransitioning(false);
+    } else if ((from === 'picker' || from === 'timer') && to === 'normal') {
+      // picker/timer → normal: モーダル非表示
+      setModalVisible(false);
+      setViewMode(to);
     } else {
-      // フェードイン効果（成長画面 → ピッカー）
+      // picker ⇔ timer: モーダル内での切り替え
       setViewMode(to);
-      if (callback) callback();
-      
-      // ピッカーをフェードインで表示
-      setTimeout(() => {
-        console.log(`Fade-in animation completed: ${from} -> ${to}`);
-        setIsTransitioning(false);
-      }, duration);
     }
+    
+    if (callback) callback();
+    console.log(`Transition completed: ${from} -> ${to}`);
+    setIsTransitioning(false);
   }, [isTransitioning]);
 
   // GrowthScreenにフォーカスされた時にタスクを再読み込み
@@ -233,7 +229,7 @@ export default function GrowthScreen() {
           minutes: Math.ceil(focusSec / 60),
         }),
       },
-      trigger: { seconds: focusSec, repeats: false },
+      trigger: { type: 'timeInterval', seconds: focusSec, repeats: false },
     }).then((id) => {
       notificationIdRef.current = id;
     });
@@ -295,7 +291,7 @@ export default function GrowthScreen() {
             minutes: Math.ceil(totalSec / 60),
           }),
         },
-        trigger: { seconds: totalSec, repeats: false },
+        trigger: { type: 'timeInterval', seconds: totalSec, repeats: false },
       }).then((id) => { 
         notificationIdRef.current = id; 
       }).catch(error => {
@@ -329,7 +325,7 @@ export default function GrowthScreen() {
           minutes: Math.ceil(timeRemaining / 60),
         }),
       },
-      trigger: { seconds: timeRemaining, repeats: false },
+      trigger: { type: 'timeInterval', seconds: timeRemaining, repeats: false },
     }).then((id) => { notificationIdRef.current = id; });
     setFocusModeStatus('running');
   }, [timeRemaining, t]);
@@ -442,12 +438,22 @@ export default function GrowthScreen() {
 
   return (
     <View style={styles.container}>
+      {/* 背景画像（固定位置） */}
+      <View style={styles.backgroundContainer}>
+        <Image 
+          source={currentThemeAsset?.image || PLACEHOLDER_IMAGE_FALLBACK} 
+          style={[styles.backgroundImage, { width, height }]} 
+          resizeMode="cover" 
+        />
+      </View>
+      
       <Animated.View 
         style={[
           styles.animatedContainer,
           {
             opacity: fadeAnim,
-            transform: [{ scale: scaleAnim }]
+            transform: [{ scale: scaleAnim }],
+            zIndex: 2,
           }
         ]}
       >
@@ -456,11 +462,12 @@ export default function GrowthScreen() {
           asset={currentThemeAsset || { image: PLACEHOLDER_IMAGE_FALLBACK }}
         />
 
-        {/* タイマーモーダル（ピッカーとタイマーの両方を包含） */}
-        <ImmersiveModal
-          visible={viewMode === 'picker' || viewMode === 'timer'}
-          overlayOpacity={0.75}
-        >
+        {/* 統合モーダル（ピッカーとタイマーの両方を包含） */}
+        <View style={{ zIndex: 10 }}>
+          <ImmersiveModal
+            visible={modalVisible}
+            overlayOpacity={0.75}
+          >
           {viewMode === 'timer' && (
             <FocusModeOverlay
               visible={true}
@@ -495,7 +502,8 @@ export default function GrowthScreen() {
               textColor="#fff"
             />
           )}
-        </ImmersiveModal>
+          </ImmersiveModal>
+        </View>
 
         <ThemeSelectionModal
           visible={isThemeSelectionModalVisible}
@@ -618,5 +626,17 @@ const styles = StyleSheet.create({
   focusModeToggleText: {
     fontWeight: 'bold',
     fontSize: 18,
+  },
+  backgroundContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 1,
+  },
+  backgroundImage: {
+    width: '100%',
+    height: '100%',
   },
 });
