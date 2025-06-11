@@ -11,6 +11,7 @@ export class SystemUIManager {
       await NavigationBar.setBackgroundColorAsync('transparent');
       await NavigationBar.setPositionAsync('absolute');
       await NavigationBar.setBehaviorAsync('overlay-swipe');
+      await NavigationBar.setVisibilityAsync('hidden');
       
       // ナビゲーションバーを完全に非表示にする
       if (Platform.Version >= 30) { // Android 11+
@@ -33,6 +34,7 @@ export class SystemUIManager {
       await NavigationBar.setBackgroundColorAsync('#ffffff');
       await NavigationBar.setPositionAsync('relative');
       await NavigationBar.setBehaviorAsync('inset-swipe');
+      await NavigationBar.setVisibilityAsync('visible');
     } catch (error) {
       console.error('Failed to disable full screen mode:', error);
     }
@@ -47,6 +49,7 @@ export class SystemUIManager {
       await NavigationBar.setBackgroundColorAsync('rgba(0, 0, 0, 0.01)'); // 完全透明ではなく微小値
       await NavigationBar.setPositionAsync('absolute');
       await NavigationBar.setBehaviorAsync('overlay-swipe');
+      await NavigationBar.setVisibilityAsync('hidden');
       
       // ナビゲーションバーボタンを隠す（Android 11+）
       if (Platform.Version >= 30) {
