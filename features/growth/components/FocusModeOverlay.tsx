@@ -1,10 +1,7 @@
-import React, { useRef, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Platform, Animated, Easing } from 'react-native';
+import React, { useEffect } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Modal } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
-import { useSystemOverlay } from '@/hooks/useSystemOverlay';
-import { useOverlay } from '@/context/OverlayContext';
-import ImmersiveModal from '@/components/ImmersiveModal';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 
@@ -26,7 +23,7 @@ interface Props {
   onRestart: () => void;
 }
 
-export default function FocusModeOverlay({
+const FocusModeOverlay = React.memo(function FocusModeOverlay({
   visible,
   width,
   subColor,
@@ -51,12 +48,29 @@ export default function FocusModeOverlay({
   const circumference = 2 * Math.PI * radius;
   const progress = focusDurationSec > 0 ? Math.max(0, Math.min(1, timeRemaining / focusDurationSec)) : 0;
 
-  // LayeredModalが自動でオーバーレイ管理するため削除
+  // 表示状態の追跡ログ（visible=trueの時のみ）
+  useEffect(() => {
+    if (visible) {
+      console.log(`[FocusModeOverlay] ⏱️ Timer overlay shown (status: ${focusModeStatus})`);
+    }
+  }, [visible, focusModeStatus]);
+
+  // 点滅防止：visibleがfalseの場合は完全に非表示
+  if (!visible) {
+    return null;
+  }
 
   return (
-    <ImmersiveModal
+    <Modal
       visible={visible}
-      overlayOpacity={0.75}
+      transparent
+      animationType="none"
+      statusBarTranslucent
+      supportedOrientations={['portrait']}
+      onRequestClose={() => {}}
+      presentationStyle="overFullScreen"
+      hardwareAccelerated={true}
+      hideModalContentWhileAnimating={false}
     >
       <View style={styles.contentContainer}>
         <TouchableOpacity 
@@ -141,17 +155,21 @@ export default function FocusModeOverlay({
           </View>
         </View>
       </View>
-    </ImmersiveModal>
+    </Modal>
   );
-}
+});
+
+export default FocusModeOverlay;
 
 const styles = StyleSheet.create({
   contentContainer: {
-    backgroundColor: 'transparent', // 背景は透明 - LayeredModalが背景を提供
+    backgroundColor: 'transparent', // 背景は透明 - GlobalOverlayManagerが背景を提供
     justifyContent: 'center',
     alignItems: 'center',
     width: '100%',
     height: '100%',
+    zIndex: 6000, // GlobalOverlayManagerより前面に表示
+    elevation: 6000,
   },
   timerContainer: {
     alignItems: 'center',

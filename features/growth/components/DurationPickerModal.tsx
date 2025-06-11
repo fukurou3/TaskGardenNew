@@ -1,12 +1,8 @@
-import React, { useEffect, useCallback, useMemo, useRef } from 'react';
-import { View, Text, StyleSheet, Pressable, useWindowDimensions, Animated, Easing } from 'react-native';
+import React, { useEffect, useCallback, useMemo } from 'react';
+import { View, Text, StyleSheet, Pressable, Modal } from 'react-native';
 import WheelPicker from 'react-native-wheely';
 import { useTranslation } from 'react-i18next';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useSystemOverlay } from '@/hooks/useSystemOverlay';
-import { useOverlay } from '@/context/OverlayContext';
-import ImmersiveModal from '@/components/ImmersiveModal';
 
 interface Props {
   visible: boolean;
@@ -23,7 +19,7 @@ interface Props {
 
 const STORAGE_KEY = '@growth_duration_picker';
 
-export default function DurationPickerModal({
+const DurationPickerModal = React.memo(function DurationPickerModal({
   visible,
   hours,
   minutes,
@@ -36,29 +32,20 @@ export default function DurationPickerModal({
   textColor,
 }: Props) {
   const { t } = useTranslation();
-  const { width } = useWindowDimensions();
-  const insets = useSafeAreaInsets();
-  const systemOverlay = useSystemOverlay({
-    defaultOpacity: 0.75,
-    autoHide: false,
-    checkPermissionOnMount: false, // 手動で権限チェック
-  });
-  const { showPickerOverlay } = useOverlay(); // フォールバック用
   const pickerWidth = 90;
   
-  // アニメーション用
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const backdropFadeAnim = useRef(new Animated.Value(0)).current;
-  const scaleAnim = useRef(new Animated.Value(0.8)).current;
-  const prevVisible = useRef(visible);
+  // 表示状態の追跡ログ（visible=trueの時のみ）
+  useEffect(() => {
+    if (visible) {
+      console.log(`[DurationPickerModal] 🎛️ Picker modal shown`);
+    }
+  }, [visible]);
   
   // オプション配列をメモ化
   const hoursOptions = useMemo(() => Array.from({ length: 24 }, (_, i) => `${i}`), []);
   const minuteOptions = useMemo(() => Array.from({ length: 60 }, (_, i) => `${i}`), []);
-  
-  // LayeredModalが自動でオーバーレイ管理するため削除
 
-  // 初期化処理（アプリ起動時に一度だけ実行）
+  // 初期化処理（初回のみ実行）
   useEffect(() => {
     let isMounted = true;
     
@@ -95,10 +82,22 @@ export default function DurationPickerModal({
     onConfirm();
   }, [hours, minutes, onConfirm]);
 
+  // 点滅防止：visibleがfalseの場合は完全に非表示
+  if (!visible) {
+    return null;
+  }
+
   return (
-    <ImmersiveModal
+    <Modal
       visible={visible}
-      overlayOpacity={0.75}
+      transparent
+      animationType="none"
+      statusBarTranslucent
+      supportedOrientations={['portrait']}
+      onRequestClose={() => {}}
+      presentationStyle="overFullScreen"
+      hardwareAccelerated={true}
+      hideModalContentWhileAnimating={false}
     >
       <View style={styles.container}>
         <View style={styles.row}>
@@ -177,17 +176,22 @@ export default function DurationPickerModal({
           </Pressable>
         </View>
       </View>
-    </ImmersiveModal>
+    </Modal>
   );
-}
+});
+
+export default DurationPickerModal;
 
 const styles = StyleSheet.create({
   container: { 
-    backgroundColor: 'transparent', // 透明背景
+    backgroundColor: 'transparent', // 透明背景 - GlobalOverlayManagerが背景を提供
     alignItems: 'center',
     justifyContent: 'center',
     width: '100%',
+    height: '100%',
     padding: 40,
+    zIndex: 6000, // GlobalOverlayManagerより前面に表示
+    elevation: 6000,
   },
   row: { 
     flexDirection: 'row', 

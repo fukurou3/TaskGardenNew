@@ -30,30 +30,13 @@ export default function ImmersiveModal({
         });
       } else {
         // iOS: ステータスバーのみ非表示
-        StatusBar.setHidden(true, 'fade');
+        StatusBar.setHidden(true, 'none'); // アニメーション無効でちらつき防止
       }
       
-      // 表示アニメーション
-      Animated.parallel([
-        Animated.timing(overlayAnim, {
-          toValue: overlayOpacity,
-          duration: 1000,
-          easing: Easing.out(Easing.quad),
-          useNativeDriver: false,
-        }),
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 1000,
-          easing: Easing.out(Easing.quad),
-          useNativeDriver: true,
-        }),
-        Animated.timing(scaleAnim, {
-          toValue: 1,
-          duration: 1000,
-          easing: Easing.out(Easing.quad),
-          useNativeDriver: true,
-        }),
-      ]).start();
+      // 即座表示（アニメーション完全無効）
+      overlayAnim.setValue(overlayOpacity);
+      fadeAnim.setValue(1);
+      scaleAnim.setValue(1);
     } else {
       // プラットフォーム固有の復元処理
       if (Platform.OS === 'android') {
@@ -63,37 +46,29 @@ export default function ImmersiveModal({
         });
       } else {
         // iOS: ステータスバーを復元
-        StatusBar.setHidden(false, 'fade');
+        StatusBar.setHidden(false, 'none'); // アニメーション無効でちらつき防止
       }
       
-      // 非表示アニメーション
-      Animated.parallel([
-        Animated.timing(overlayAnim, {
-          toValue: 0,
-          duration: 250,
-          easing: Easing.in(Easing.quad),
-          useNativeDriver: false,
-        }),
-        Animated.timing(fadeAnim, {
-          toValue: 0,
-          duration: 250,
-          easing: Easing.in(Easing.quad),
-          useNativeDriver: true,
-        }),
-        Animated.timing(scaleAnim, {
-          toValue: 0.9,
-          duration: 250,
-          easing: Easing.in(Easing.quad),
-          useNativeDriver: true,
-        }),
-      ]).start();
+      // 即座非表示（アニメーション完全無効）
+      overlayAnim.setValue(0);
+      fadeAnim.setValue(0);
+      scaleAnim.setValue(0.9);
     }
   }, [visible, overlayOpacity, fadeAnim, scaleAnim, overlayAnim]);
 
   if (!visible) return null;
 
   return (
-    <Modal visible={visible} transparent animationType="none" statusBarTranslucent>
+    <Modal 
+      visible={visible} 
+      transparent 
+      animationType="none" 
+      statusBarTranslucent
+      supportedOrientations={['portrait']}
+      onRequestClose={() => {}}
+      presentationStyle="overFullScreen"
+      hardwareAccelerated={true}
+    >
       {/* フルスクリーンオーバーレイ */}
       <Animated.View
         style={[
@@ -149,7 +124,7 @@ const styles = StyleSheet.create({
   
   dimBackground: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 1)',
+    backgroundColor: 'rgba(0, 0, 0, 0.75)', // 適切な薄暗い効果
   },
   
   // iOS用コンテンツ

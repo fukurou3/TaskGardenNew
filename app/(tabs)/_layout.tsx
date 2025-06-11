@@ -35,6 +35,8 @@ function InnerTabs() {
     ({ route }: { route: RouteProp<ParamListBase, string> }): BottomTabNavigationOptions => {
     return {
       headerShown: false,
+      // アニメーション設定でちらつきを防ぐ
+      animationEnabled: false,
       tabBarStyle: {
         height: isSelecting ? 0 : TAB_HEIGHT + (insets.bottom > 0 ? insets.bottom : 0),
         paddingBottom: isSelecting ? 0 : insets.bottom,
@@ -99,6 +101,11 @@ function InnerTabs() {
         <Tabs
           // 4. 作成したscreenOptions関数を渡します
           screenOptions={screenOptions}
+          screenListeners={{
+            focus: () => {
+              // 画面遷移時のアニメーションを無効化してちらつきを防ぐ
+            }
+          }}
         >
           {/* ✅ 表示するメインタブ */}
           <Tabs.Screen name="calendar/index" />

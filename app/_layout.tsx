@@ -24,7 +24,6 @@ import { OverlayProvider } from '@/context/OverlayContext';
 import { PortalProvider } from '@/context/PortalContext';
 import Toast from 'react-native-toast-message';
 import StartupAnimation from '@/components/StartupAnimation';
-import GlobalOverlay from '@/components/GlobalOverlay';
 
 import * as NavigationBar from 'expo-navigation-bar';
 import { Platform } from 'react-native';
@@ -91,7 +90,6 @@ export default function RootLayout() {
               {!animationDone && (
                 <StartupAnimation onAnimationEnd={() => setAnimationDone(true)} />
               )}
-              <GlobalOverlay />
             </PortalProvider>
           </OverlayProvider>
         </GoogleCalendarProvider>

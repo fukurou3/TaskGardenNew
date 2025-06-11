@@ -1,40 +1,32 @@
-// グローバルオーバーレイ管理
+// 成長画面のグローバルオーバーレイ管理（アニメーション廃止・簡素化版）
 import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
 
-type OverlayType = 'none' | 'picker' | 'timer';
+// 単一のenum型で状態管理
+export type OverlayType = 'none' | 'picker' | 'timer';
 
 interface OverlayContextValue {
   overlayType: OverlayType;
-  showPickerOverlay: () => void;
-  showTimerOverlay: () => void;
-  hideOverlay: () => void;
+  setOverlayType: (type: OverlayType) => void;
 }
 
 const OverlayContext = createContext<OverlayContextValue>({
   overlayType: 'none',
-  showPickerOverlay: () => {},
-  showTimerOverlay: () => {},
-  hideOverlay: () => {},
+  setOverlayType: () => {},
 });
 
 export function OverlayProvider({ children }: { children: ReactNode }) {
   const [overlayType, setOverlayType] = useState<OverlayType>('none');
 
-  const showPickerOverlay = useCallback(() => {
-    setOverlayType('picker');
-  }, []);
-
-  const showTimerOverlay = useCallback(() => {
-    setOverlayType('timer');
-  }, []);
-
-  const hideOverlay = useCallback(() => {
-    setOverlayType('none');
+  const handleSetOverlayType = useCallback((type: OverlayType) => {
+    setOverlayType(type);
   }, []);
 
   return (
     <OverlayContext.Provider
-      value={{ overlayType, showPickerOverlay, showTimerOverlay, hideOverlay }}
+      value={{ 
+        overlayType, 
+        setOverlayType: handleSetOverlayType
+      }}
     >
       {children}
     </OverlayContext.Provider>
