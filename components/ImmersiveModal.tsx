@@ -19,17 +19,15 @@ export default function ImmersiveModal({
   const scaleAnim = useRef(new Animated.Value(0.9)).current;
   const overlayAnim = useRef(new Animated.Value(0)).current;
   
-  // Androidでタブナビゲーションエリアもカバーするための画面サイズ取得
-  const screenData = Dimensions.get('screen');
-  const windowData = Dimensions.get('window');
   
   useEffect(() => {
     if (visible) {
       // プラットフォーム固有の没入処理
       if (Platform.OS === 'android') {
-        // Android: システムUIは非表示にしない（タブナビゲーションエリアにも薄暗い効果を適用するため）
-        // NavigationBar.setVisibilityAsync('hidden');
-        // StatusBar.setHidden(true, 'fade');
+        // Android: Immersive Mode でナビゲーションバーとステータスバーを隠す
+        NavigationBar.setBehaviorAsync('immersive').catch(() => {});
+        NavigationBar.setVisibilityAsync('hidden').catch(() => {});
+        StatusBar.setHidden(true, 'fade');
       } else {
         // iOS: ステータスバーのみ非表示
         StatusBar.setHidden(true, 'fade');
@@ -59,9 +57,10 @@ export default function ImmersiveModal({
     } else {
       // プラットフォーム固有の復元処理
       if (Platform.OS === 'android') {
-        // Android: システムUIは表示のまま維持
-        // NavigationBar.setVisibilityAsync('visible');
-        // StatusBar.setHidden(false, 'fade');
+        // Android: Immersive Mode 解除
+        NavigationBar.setBehaviorAsync('inset-swipe').catch(() => {});
+        NavigationBar.setVisibilityAsync('visible').catch(() => {});
+        StatusBar.setHidden(false, 'fade');
       } else {
         // iOS: ステータスバーを復元
         StatusBar.setHidden(false, 'fade');
@@ -94,7 +93,12 @@ export default function ImmersiveModal({
   if (!visible) return null;
 
   return (
-    <>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="none"
+      statusBarTranslucent
+    >
       {/* フルスクリーンオーバーレイ */}
       <Animated.View
         style={[
@@ -123,7 +127,7 @@ export default function ImmersiveModal({
           {children}
         </View>
       </Animated.View>
-    </>
+    </Modal>
   );
 }
 
