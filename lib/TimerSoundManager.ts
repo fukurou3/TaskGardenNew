@@ -123,10 +123,10 @@ class TimerSoundManager {
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: false,
         staysActiveInBackground: false,
-        interruptionModeIOS: Audio.INTERRUPTION_MODE_IOS_DO_NOT_MIX,
+        interruptionModeIOS: Audio.InterruptionModeIOS.DoNotMix,
         playsInSilentModeIOS: true,
         shouldDuckAndroid: true,
-        interruptionModeAndroid: Audio.INTERRUPTION_MODE_ANDROID_DO_NOT_MIX,
+        interruptionModeAndroid: Audio.InterruptionModeAndroid.DoNotMix,
         playThroughEarpieceAndroid: false,
       });
     } catch (error) {
