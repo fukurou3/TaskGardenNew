@@ -50,7 +50,7 @@ export default function ThemeSelectionModal({ visible, themes, selectedId, onSel
 }
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'center', alignItems: 'center' },
   content: { backgroundColor: '#fff', borderRadius: 10, padding: 20, width: '90%', maxHeight: '80%' },
   title: { fontSize: 20, fontWeight: 'bold', marginBottom: 20, textAlign: 'center', color: '#333' },
   optionsContainer: { justifyContent: 'space-around', paddingBottom: 20 },
@@ -60,7 +60,7 @@ const styles = StyleSheet.create({
   optionImage: { width: '80%', height: '80%', marginBottom: 5 },
   optionName: { fontSize: 14, fontWeight: 'bold', color: '#333', textAlign: 'center' },
   optionNameLocked: { color: '#888' },
-  lockedOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
+  lockedOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.75)', borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
   button: { paddingVertical: 12, paddingHorizontal: 20, borderRadius: 8, alignItems: 'center', marginHorizontal: 20 },
   closeButton: { marginTop: 20, backgroundColor: '#4CAF50' },
   buttonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },

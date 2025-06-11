@@ -3,6 +3,10 @@ import { View, Text, StyleSheet, Pressable, useWindowDimensions, Animated, Easin
 import WheelPicker from 'react-native-wheely';
 import { useTranslation } from 'react-i18next';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSystemOverlay } from '@/hooks/useSystemOverlay';
+import { useOverlay } from '@/context/OverlayContext';
+import ImmersiveModal from '@/components/ImmersiveModal';
 
 interface Props {
   visible: boolean;
@@ -33,10 +37,18 @@ export default function DurationPickerModal({
 }: Props) {
   const { t } = useTranslation();
   const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const systemOverlay = useSystemOverlay({
+    defaultOpacity: 0.75,
+    autoHide: false,
+    checkPermissionOnMount: false, // 手動で権限チェック
+  });
+  const { showPickerOverlay } = useOverlay(); // フォールバック用
   const pickerWidth = 90;
   
   // アニメーション用
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const backdropFadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.8)).current;
   const prevVisible = useRef(visible);
   
@@ -44,27 +56,7 @@ export default function DurationPickerModal({
   const hoursOptions = useMemo(() => Array.from({ length: 24 }, (_, i) => `${i}`), []);
   const minuteOptions = useMemo(() => Array.from({ length: 60 }, (_, i) => `${i}`), []);
   
-  // アニメーション管理
-  useEffect(() => {
-    if (visible !== prevVisible.current) {
-      if (visible) {
-        // 表示アニメーション - フェードイン効果
-        fadeAnim.setValue(0);
-        scaleAnim.setValue(1);
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 1000,
-          easing: Easing.out(Easing.quad),
-          useNativeDriver: true,
-        }).start();
-      } else {
-        // 非表示アニメーション - 即座に非表示
-        fadeAnim.setValue(0);
-        scaleAnim.setValue(1);
-      }
-      prevVisible.current = visible;
-    }
-  }, [visible, fadeAnim, scaleAnim]);
+  // LayeredModalが自動でオーバーレイ管理するため削除
 
   // 初期化処理（アプリ起動時に一度だけ実行）
   useEffect(() => {
@@ -103,127 +95,99 @@ export default function DurationPickerModal({
     onConfirm();
   }, [hours, minutes, onConfirm]);
 
-  // react-native-modalを使わず、直接条件付きレンダリング
-  if (!visible) return null;
-
   return (
-    <>
-      {/* 背景のオーバーレイ */}
-      <Pressable 
-        style={styles.backdrop} 
-        onPress={onClose}
-      />
-      
-      {/* ピッカーコンテンツ */}
-      <Animated.View 
-        style={[
-          styles.modalContainer,
-          {
-            opacity: fadeAnim,
-            transform: [{ scale: scaleAnim }]
-          }
-        ]}
-      >
-        <View style={styles.container}>
-          <View style={styles.row}>
-            <View style={styles.pickerGroup}>
-              <View style={styles.pickerContainer}>
-                <WheelPicker
-                  key={visible ? 'hours-visible' : 'hours-hidden'}
-                  options={hoursOptions}
-                  selectedIndex={hours}
-                  onChange={onChangeHours}
-                  itemHeight={60}
-                  visibleRest={1}
-                  containerStyle={{ 
-                    backgroundColor: 'transparent',
-                    width: pickerWidth,
-                  }}
-                  itemTextStyle={{ 
-                    color: textColor, 
-                    fontSize: 48, 
-                    fontWeight: '300',
-                    letterSpacing: 1.5,
-                    fontFamily: 'System',
-                  }}
-                  selectedIndicatorStyle={{
-                    backgroundColor: 'transparent',
-                  }}
-                  decelerationRate="fast"
-                  scrollEventThrottle={16}
-                  showsVerticalScrollIndicator={false}
-                  bounces={true}
-                  bouncesZoom={false}
-                />
-                <Text style={[styles.overlayLabel, { color: textColor }]}>{t('common.hours_label')}</Text>
-              </View>
-            </View>
-            <View style={styles.pickerGroup}>
-              <View style={styles.pickerContainer}>
-                <WheelPicker
-                  key={visible ? 'minutes-visible' : 'minutes-hidden'}
-                  options={minuteOptions}
-                  selectedIndex={minutes}
-                  onChange={onChangeMinutes}
-                  itemHeight={60}
-                  visibleRest={1}
-                  containerStyle={{ 
-                    backgroundColor: 'transparent',
-                    width: pickerWidth,
-                  }}
-                  itemTextStyle={{ 
-                    color: textColor, 
-                    fontSize: 48, 
-                    fontWeight: '300',
-                    letterSpacing: 1.5,
-                    fontFamily: 'System',
-                  }}
-                  selectedIndicatorStyle={{
-                    backgroundColor: 'transparent',
-                  }}
-                  decelerationRate="fast"
-                  snapToAlignment="center"
-                  scrollEventThrottle={16}
-                  showsVerticalScrollIndicator={false}
-                  bounces={true}
-                  bouncesZoom={false}
-                />
-                <Text style={[styles.overlayLabel, { color: textColor }]}>{t('common.minutes_label')}</Text>
-              </View>
+    <ImmersiveModal
+      visible={visible}
+      overlayOpacity={0.75}
+    >
+      <View style={styles.container}>
+        <View style={styles.row}>
+          <View style={styles.pickerGroup}>
+            <View style={styles.pickerContainer}>
+              <WheelPicker
+                key={visible ? 'hours-visible' : 'hours-hidden'}
+                options={hoursOptions}
+                selectedIndex={hours}
+                onChange={onChangeHours}
+                itemHeight={60}
+                visibleRest={1}
+                containerStyle={{ 
+                  backgroundColor: 'transparent',
+                  width: pickerWidth,
+                }}
+                itemTextStyle={{ 
+                  color: textColor, 
+                  fontSize: 48, 
+                  fontWeight: '300',
+                  letterSpacing: 1.5,
+                  fontFamily: 'System',
+                }}
+                selectedIndicatorStyle={{
+                  backgroundColor: 'transparent',
+                }}
+                decelerationRate="fast"
+                scrollEventThrottle={16}
+                showsVerticalScrollIndicator={false}
+                bounces={true}
+                bouncesZoom={false}
+              />
+              <Text style={[styles.overlayLabel, { color: textColor }]}>{t('common.hours_label')}</Text>
             </View>
           </View>
-          <View style={styles.buttonRow}>
-            <Pressable style={styles.cancelButton} onPress={onClose}>
-              <Text style={[styles.cancelButtonText, { color: textColor }]}>終了</Text>
-            </Pressable>
-            <Pressable style={styles.startButton} onPress={handleConfirm}>
-              <Text style={[styles.startButtonText, { color: textColor }]}>開始</Text>
-            </Pressable>
+          <View style={styles.pickerGroup}>
+            <View style={styles.pickerContainer}>
+              <WheelPicker
+                key={visible ? 'minutes-visible' : 'minutes-hidden'}
+                options={minuteOptions}
+                selectedIndex={minutes}
+                onChange={onChangeMinutes}
+                itemHeight={60}
+                visibleRest={1}
+                containerStyle={{ 
+                  backgroundColor: 'transparent',
+                  width: pickerWidth,
+                }}
+                itemTextStyle={{ 
+                  color: textColor, 
+                  fontSize: 48, 
+                  fontWeight: '300',
+                  letterSpacing: 1.5,
+                  fontFamily: 'System',
+                }}
+                selectedIndicatorStyle={{
+                  backgroundColor: 'transparent',
+                }}
+                decelerationRate="fast"
+                snapToAlignment="center"
+                scrollEventThrottle={16}
+                showsVerticalScrollIndicator={false}
+                bounces={true}
+                bouncesZoom={false}
+              />
+              <Text style={[styles.overlayLabel, { color: textColor }]}>{t('common.minutes_label')}</Text>
+            </View>
           </View>
         </View>
-      </Animated.View>
-    </>
+        <View style={styles.buttonRow}>
+          <Pressable style={styles.cancelButton} onPress={onClose}>
+            <Text style={[styles.cancelButtonText, { color: textColor }]}>終了</Text>
+          </Pressable>
+          <Pressable style={styles.startButton} onPress={handleConfirm}>
+            <Text style={[styles.startButtonText, { color: textColor }]}>開始</Text>
+          </Pressable>
+        </View>
+      </View>
+    </ImmersiveModal>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'transparent',
-    zIndex: 10,
-  },
-  modalContainer: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 11,
-  },
   container: { 
-    backgroundColor: 'transparent',
+    backgroundColor: 'transparent', // 透明背景
     alignItems: 'center',
     justifyContent: 'center',
     width: '100%',
-    marginLeft: -30,
+    padding: 40,
   },
   row: { 
     flexDirection: 'row', 

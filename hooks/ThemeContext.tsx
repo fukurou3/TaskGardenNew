@@ -19,7 +19,6 @@ interface ThemeContextValue {
   colorScheme: 'light' | 'dark'
   subColor: string
   setSubColor: (color: string) => void
-  setTemporaryDarkMode: (enabled: boolean) => void
 }
 
 const ThemeContext = createContext<ThemeContextValue>({
@@ -28,7 +27,6 @@ const ThemeContext = createContext<ThemeContextValue>({
   colorScheme: 'light',
   subColor: '#4CAF50',
   setSubColor: () => {},
-  setTemporaryDarkMode: () => {},
 })
 
 // ライト／ダーク判定ヘルパー
@@ -42,7 +40,6 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   )
   const [themeChoice, setThemeChoiceState] = useState<ThemeChoice>('light')
   const [subColor, setSubColorState] = useState('#4CAF50') // デフォルト緑
-  const [temporaryDarkMode, setTemporaryDarkMode] = useState(false)
 
   useEffect(() => {
     const sub = Appearance.addChangeListener(evt => {
@@ -64,26 +61,20 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   const setThemeChoice = useCallback((t: ThemeChoice) => {
     setThemeChoiceState(t)
-    setItem('USER_THEME', t)
+    Promise.resolve().then(() => setItem('USER_THEME', t))
   }, [])
 
   const setSubColor = useCallback((color: string) => {
     setSubColorState(color)
-    setItem('USER_SUBCOLOR', color)
+    Promise.resolve().then(() => setItem('USER_SUBCOLOR', color))
   }, [])
 
-  const setTemporaryDarkModeCallback = useCallback((enabled: boolean) => {
-    setTemporaryDarkMode(enabled);
-  }, [])
-
-  const baseColorScheme: 'light' | 'dark' =
+  const colorScheme: 'light' | 'dark' =
     themeChoice === 'system' ? systemScheme : themeChoice
-  
-  const colorScheme: 'light' | 'dark' = temporaryDarkMode ? 'dark' : baseColorScheme
 
   return (
     <ThemeContext.Provider
-      value={{ themeChoice, setThemeChoice, colorScheme, subColor, setSubColor, setTemporaryDarkMode: setTemporaryDarkModeCallback }}
+      value={{ themeChoice, setThemeChoice, colorScheme, subColor, setSubColor }}
     >
       {children}
     </ThemeContext.Provider>

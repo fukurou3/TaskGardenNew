@@ -2,6 +2,9 @@ import React, { useRef, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform, Animated, Easing } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
+import { useSystemOverlay } from '@/hooks/useSystemOverlay';
+import { useOverlay } from '@/context/OverlayContext';
+import ImmersiveModal from '@/components/ImmersiveModal';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 
@@ -48,60 +51,14 @@ export default function FocusModeOverlay({
   const circumference = 2 * Math.PI * radius;
   const progress = focusDurationSec > 0 ? Math.max(0, Math.min(1, timeRemaining / focusDurationSec)) : 0;
 
-  // アニメーション用
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const scaleAnim = useRef(new Animated.Value(0.9)).current;
-  const prevVisible = useRef(visible);
-
-  // アニメーション管理
-  useEffect(() => {
-    if (visible !== prevVisible.current) {
-      if (visible) {
-        // 表示アニメーション - 即座に薄暗いオーバーレイを表示
-        fadeAnim.setValue(1);
-        scaleAnim.setValue(0.9);
-        Animated.timing(scaleAnim, {
-          toValue: 1,
-          duration: 300,
-          easing: Easing.out(Easing.quad),
-          useNativeDriver: true,
-        }).start();
-      } else {
-        // 非表示アニメーション
-        Animated.parallel([
-          Animated.timing(fadeAnim, {
-            toValue: 0,
-            duration: 250,
-            easing: Easing.in(Easing.quad),
-            useNativeDriver: true,
-          }),
-          Animated.timing(scaleAnim, {
-            toValue: 0.9,
-            duration: 250,
-            easing: Easing.in(Easing.quad),
-            useNativeDriver: true,
-          }),
-        ]).start();
-      }
-      prevVisible.current = visible;
-    }
-  }, [visible, fadeAnim, scaleAnim]);
-
-  if (!visible) return null;
+  // LayeredModalが自動でオーバーレイ管理するため削除
 
   return (
-    <Animated.View style={[styles.overlay, { opacity: fadeAnim }]}>
-      {/* タイマー専用の薄暗いオーバーレイ - 常に不透明度1で表示 */}
-      <View style={styles.dimOverlay} />
-      <Animated.View 
-        style={[
-          styles.contentContainer,
-          {
-            opacity: fadeAnim,
-            transform: [{ scale: scaleAnim }]
-          }
-        ]}
-      >
+    <ImmersiveModal
+      visible={visible}
+      overlayOpacity={0.75}
+    >
+      <View style={styles.contentContainer}>
         <TouchableOpacity 
           onPress={onToggleMute} 
           style={[styles.audioButton, { top: 60 + insets.top }]}
@@ -183,31 +140,18 @@ export default function FocusModeOverlay({
             </TouchableOpacity>
           </View>
         </View>
-      </Animated.View>
-    </Animated.View>
+      </View>
+    </ImmersiveModal>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'transparent',
-    zIndex: 10,
-  },
-  dimOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    zIndex: 1,
-  },
   contentContainer: {
-    backgroundColor: 'transparent',
+    backgroundColor: 'transparent', // 背景は透明 - LayeredModalが背景を提供
     justifyContent: 'center',
     alignItems: 'center',
     width: '100%',
     height: '100%',
-    zIndex: 2,
   },
   timerContainer: {
     alignItems: 'center',

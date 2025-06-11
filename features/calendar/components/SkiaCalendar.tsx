@@ -32,6 +32,13 @@ const CALENDAR_FONT_SIZES: Record<FontSizeKey, number> = {
   large: 18,
 };
 
+const EVENT_FONT_SIZES: Record<FontSizeKey, number> = {
+  small: 8,
+  normal: 10,
+  medium: 12,
+  large: 14,
+};
+
 interface SkiaCalendarProps {
   date: dayjs.Dayjs;
   opacity: SharedValue<number>;
@@ -74,7 +81,7 @@ export default function SkiaCalendar({
   const cellHeight = showTaskTitles ? cellWidth * FULL_CELL_HEIGHT_FACTOR : cellWidth; // 大表示時は縦長に
 
   const font = useFont(FONT_PATH_MEDIUM, CALENDAR_FONT_SIZES[fontSizeKey]);
-  const eventFont = useFont(FONT_PATH_REGULAR, 10);
+  const eventFont = useFont(FONT_PATH_REGULAR, EVENT_FONT_SIZES[fontSizeKey]);
   const skiaImage = backgroundImage ? useImage(backgroundImage) : null;
 
   const year = targetDate.year();

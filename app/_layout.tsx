@@ -20,8 +20,11 @@ if (typeof dayjs !== 'function') {
 import { ThemeProvider, useAppTheme } from '@/hooks/ThemeContext';
 import { FontSizeProvider } from '@/context/FontSizeContext';
 import { GoogleCalendarProvider } from '@/context/GoogleCalendarContext';
+import { OverlayProvider } from '@/context/OverlayContext';
+import { PortalProvider } from '@/context/PortalContext';
 import Toast from 'react-native-toast-message';
 import StartupAnimation from '@/components/StartupAnimation';
+import GlobalOverlay from '@/components/GlobalOverlay';
 
 import * as NavigationBar from 'expo-navigation-bar';
 import { Platform } from 'react-native';
@@ -36,6 +39,7 @@ function InnerLayout() {
   useEffect(() => {
     if (Platform.OS === 'android') {
       NavigationBar.setButtonStyleAsync(isDark ? 'light' : 'dark');
+      // edgeToEdge有効時はナビゲーションバー設定はapp.jsonで管理
     }
   }, [isDark]);
 
@@ -81,10 +85,15 @@ export default function RootLayout() {
     <ThemeProvider>
       <FontSizeProvider>
         <GoogleCalendarProvider>
-          <InnerLayout />
-          {!animationDone && (
-            <StartupAnimation onAnimationEnd={() => setAnimationDone(true)} />
-          )}
+          <OverlayProvider>
+            <PortalProvider>
+              <InnerLayout />
+              {!animationDone && (
+                <StartupAnimation onAnimationEnd={() => setAnimationDone(true)} />
+              )}
+              <GlobalOverlay />
+            </PortalProvider>
+          </OverlayProvider>
         </GoogleCalendarProvider>
       </FontSizeProvider>
     </ThemeProvider>

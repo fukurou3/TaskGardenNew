@@ -35,7 +35,7 @@ const isValidTransition = (from: ViewMode, to: ViewMode): boolean => {
 };
 
 export default function GrowthScreen() {
-  const { colorScheme, subColor, setTemporaryDarkMode } = useAppTheme();
+  const { colorScheme, subColor } = useAppTheme();
   const isDark = colorScheme === 'dark';
   const { t } = useTranslation();
   const { width } = useWindowDimensions();
@@ -92,14 +92,6 @@ export default function GrowthScreen() {
     initializeAudio();
   }, []);
 
-  // ピッカーとタイマー画面時に一時的にダークモードを有効にする
-  useEffect(() => {
-    if (viewMode === 'picker' || viewMode === 'timer') {
-      setTemporaryDarkMode(true);
-    } else {
-      setTemporaryDarkMode(false);
-    }
-  }, [viewMode, setTemporaryDarkMode]);
 
   // focusDurationSecが変更されたときにtempの値を更新
   useEffect(() => {
@@ -124,9 +116,10 @@ export default function GrowthScreen() {
     console.log(`Animation transition: ${from} -> ${to}`);
     setIsTransitioning(true);
     
-    // 成長画面 → ピッカーのみフェードイン効果、他は即座遷移
+    // 成長画面 → ピッカーのみフェードイン効果、モーダル⇔タイマー間は即座遷移
     const shouldAnimate = from === 'normal' && to === 'picker';
-    const duration = shouldAnimate ? 300 : 0;
+    const isModalTimerTransition = (from === 'picker' && to === 'timer') || (from === 'timer' && to === 'picker');
+    const duration = shouldAnimate && !isModalTimerTransition ? 0 : 0; // すべて即座遷移
     console.log(`Animation duration: ${duration}ms`);
     
     if (duration === 0) {
@@ -258,6 +251,7 @@ export default function GrowthScreen() {
     setTempMinutes(minutes);
     setTempSeconds(0);
     
+    // アニメーション開始
     animateTransition('normal', 'picker');
   }, [focusDurationSec, isTransitioning, animateTransition]);
 
@@ -525,20 +519,7 @@ export default function GrowthScreen() {
         )}
       </Animated.View>
 
-      {/* 薄暗いオーバーレイ - ピッカー表示時または遷移中 */}
-      {(viewMode === 'picker' || (isTransitioning && viewMode !== 'normal')) && (
-        <Animated.View 
-          style={[
-            styles.pickerDimOverlay,
-            { 
-              opacity: viewMode === 'normal' ? fadeAnim : 1,
-              pointerEvents: 'none'
-            }
-          ]} 
-        />
-      )}
-
-      {/* ピッカーモーダル - 薄暗いオーバーレイの上に配置 */}
+      {/* ピッカーモーダル */}
       <DurationPickerModal
         visible={viewMode === 'picker'}
         hours={tempHours}
@@ -562,15 +543,6 @@ const styles = StyleSheet.create({
   },
   animatedContainer: {
     flex: 1,
-  },
-  pickerDimOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    zIndex: 5,
   },
   loadingText: {
     flex: 1,
@@ -601,24 +573,36 @@ const styles = StyleSheet.create({
     paddingVertical: 15,
     paddingHorizontal: 40,
     paddingBottom: 30,
+    zIndex: 400, // グローバルオーバーレイより前面
+    elevation: 400, // Android用
   },
   iconButton: {
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)', // より不透明に
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
   },
   focusModeButton: {
     paddingVertical: 16,
     paddingHorizontal: 32,
     borderRadius: 30,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)', // より不透明に
     justifyContent: 'center',
     alignItems: 'center',
     minWidth: 120,
     minHeight: 60,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
   },
   focusModeToggleText: {
     fontWeight: 'bold',
