@@ -54,6 +54,10 @@ export type TaskScreenStyles = {
  folderTabSelected: ViewStyle;
  folderTabText: TextStyle;
  folderTabSelectedText: TextStyle;
+ dragHandle: ViewStyle;
+ reorderButtonsContainer: ViewStyle;
+ reorderButtonDisabled: ViewStyle;
+ menuButton: ViewStyle;
 };
 
 export const createStyles = (isDark: boolean, subColor: string, fontSizeKey: FontSizeKey): TaskScreenStyles => {
@@ -362,6 +366,32 @@ export const createStyles = (isDark: boolean, subColor: string, fontSizeKey: Fon
     folderTabSelectedText: {
         color: isDark ? '#FFFFFF' : '#000000', // 選択時の文字色
         fontWeight: '600', // 文字を濃く
+    },
+    dragHandle: {
+        paddingHorizontal: 8,
+        paddingVertical: 8,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginLeft: 4,
+        minWidth: 32,
+        minHeight: 32,
+        // Google Todo風のシンプルなスタイル
+    },
+    reorderButtonsContainer: {
+        flexDirection: 'column',
+        alignItems: 'center',
+        marginLeft: 8,
+    },
+    reorderButtonDisabled: {
+        opacity: 0.3,
+    },
+    menuButton: {
+        paddingHorizontal: 8,
+        paddingVertical: 8,
+        borderRadius: 6,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginLeft: 4,
     },
  });
 };

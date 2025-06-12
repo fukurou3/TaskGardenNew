@@ -78,6 +78,15 @@ export default function StoreScreen() {
     const price = item.salePrice || item.originalPrice;
     const canPurchase = canAfford(price);
     
+    const getRarityColor = (rarity: string) => {
+      switch (rarity) {
+        case 'legendary': return '#FF9800';
+        case 'epic': return '#9C27B0';
+        case 'rare': return '#2196F3';
+        default: return isDark ? '#404040' : '#e0e0e0';
+      }
+    };
+    
     return (
       <TouchableOpacity
         key={item.id}
@@ -86,18 +95,14 @@ export default function StoreScreen() {
         disabled={!canPurchase}
         activeOpacity={0.8}
       >
-        <LinearGradient
-          colors={isDark 
-            ? ['rgba(255,255,255,0.1)', 'rgba(255,255,255,0.05)']
-            : ['rgba(0,0,0,0.05)', 'rgba(0,0,0,0.02)']
-          }
-          style={[styles.storeItem, {
-            borderColor: item.rarity === 'legendary' ? '#FF9800' : 
-                        item.rarity === 'epic' ? '#9C27B0' : 
-                        item.rarity === 'rare' ? '#2196F3' : '#9E9E9E',
+        <View style={[
+          styles.storeItem, 
+          {
+            backgroundColor: isDark ? '#2a2a2a' : '#fff',
+            borderColor: getRarityColor(item.rarity),
             opacity: canPurchase ? 1 : 0.6,
-          }]}
-        >
+          }
+        ]}>
           {item.discount && (
             <View style={styles.discountBadge}>
               <Text style={styles.discountText}>-{item.discount}%</Text>
@@ -120,8 +125,11 @@ export default function StoreScreen() {
             
             <View style={styles.tagsContainer}>
               {item.tags.slice(0, 2).map((tag, index) => (
-                <View key={index} style={styles.tag}>
-                  <Text style={styles.tagText}>{tag}</Text>
+                <View key={index} style={[
+                  styles.tag,
+                  { backgroundColor: isDark ? 'rgba(76, 175, 80, 0.2)' : 'rgba(76, 175, 80, 0.1)' }
+                ]}>
+                  <Text style={[styles.tagText, { color: '#4CAF50' }]}>{tag}</Text>
                 </View>
               ))}
             </View>
@@ -132,15 +140,29 @@ export default function StoreScreen() {
                   {item.originalPrice} 💎
                 </Text>
               )}
-              <View style={styles.currentPrice}>
+              <TouchableOpacity 
+                style={[
+                  styles.buyButton,
+                  {
+                    backgroundColor: canPurchase 
+                      ? (item.discount ? '#FF6B6B' : '#4CAF50')
+                      : (isDark ? '#404040' : '#e0e0e0')
+                  }
+                ]}
+                onPress={() => handlePurchase(item)}
+                disabled={!canPurchase}
+              >
                 <Text style={styles.priceIcon}>💎</Text>
-                <Text style={[styles.priceAmount, { color: isDark ? '#fff' : '#000' }]}>
+                <Text style={[
+                  styles.priceAmount, 
+                  { color: canPurchase ? '#fff' : (isDark ? '#666' : '#999') }
+                ]}>
                   {formatAmount(price)}
                 </Text>
-              </View>
+              </TouchableOpacity>
             </View>
           </View>
-        </LinearGradient>
+        </View>
       </TouchableOpacity>
     );
   };
@@ -229,16 +251,16 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   specialOfferBanner: {
-    backgroundColor: '#FF4444',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
+    backgroundColor: '#FF6B6B',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
     alignSelf: 'flex-start',
   },
   specialOfferText: {
     color: '#fff',
-    fontSize: 14,
-    fontWeight: '700',
+    fontSize: 13,
+    fontWeight: '600',
   },
   categoriesContainer: {
     paddingHorizontal: 20,
@@ -247,24 +269,24 @@ const styles = StyleSheet.create({
   categoryButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    marginRight: 12,
-    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    marginRight: 8,
+    borderRadius: 16,
     borderWidth: 1,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
   categoryIcon: {
-    fontSize: 16,
-    marginRight: 6,
+    fontSize: 14,
+    marginRight: 4,
   },
   categoryText: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 13,
+    fontWeight: '500',
   },
   itemsContainer: {
     flex: 1,
@@ -281,60 +303,60 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   storeItem: {
-    borderRadius: 16,
-    borderWidth: 2,
+    borderRadius: 12,
+    borderWidth: 1,
     padding: 16,
     position: 'relative',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 6,
-    minHeight: 180,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 3,
+    minHeight: 160,
   },
   discountBadge: {
     position: 'absolute',
     top: 8,
     right: 8,
-    backgroundColor: '#F44336',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
+    backgroundColor: '#FF6B6B',
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 8,
     zIndex: 1,
   },
   discountText: {
     color: '#fff',
-    fontSize: 12,
-    fontWeight: '700',
+    fontSize: 11,
+    fontWeight: '600',
   },
   limitedBadge: {
     position: 'absolute',
     top: 8,
     left: 8,
     backgroundColor: '#FF9800',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 8,
     zIndex: 1,
   },
   limitedText: {
     color: '#fff',
-    fontSize: 12,
-    fontWeight: '700',
+    fontSize: 11,
+    fontWeight: '600',
   },
   itemContent: {
     flex: 1,
     justifyContent: 'space-between',
   },
   itemName: {
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: 15,
+    fontWeight: '600',
     marginBottom: 6,
     lineHeight: 20,
   },
   itemDescription: {
     fontSize: 12,
-    fontWeight: '500',
+    fontWeight: '400',
     lineHeight: 16,
     marginBottom: 8,
   },
@@ -345,15 +367,13 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   tag: {
-    backgroundColor: 'rgba(33, 150, 243, 0.2)',
     paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: 8,
+    borderRadius: 6,
   },
   tagText: {
-    color: '#2196F3',
     fontSize: 10,
-    fontWeight: '600',
+    fontWeight: '500',
   },
   priceContainer: {
     alignItems: 'flex-end',
@@ -363,21 +383,20 @@ const styles = StyleSheet.create({
     textDecorationLine: 'line-through',
     marginBottom: 2,
   },
-  currentPrice: {
+  buyButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(76, 175, 80, 0.2)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
   },
   priceIcon: {
     fontSize: 14,
     marginRight: 4,
   },
   priceAmount: {
-    fontSize: 14,
-    fontWeight: '700',
+    fontSize: 13,
+    fontWeight: '600',
   },
   bottomPadding: {
     height: 20,

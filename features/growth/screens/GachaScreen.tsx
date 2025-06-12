@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Text, StyleSheet, View, Alert, ScrollView, TouchableOpacity, Dimensions } from 'react-native';
+import { Text, StyleSheet, View, Alert, TouchableOpacity, Image, ImageBackground, Dimensions, FlatList } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAppTheme } from '@/hooks/ThemeContext';
 import { useTranslation } from 'react-i18next';
@@ -10,7 +10,7 @@ import GrowthHeader from '../components/GrowthHeader';
 import { useCurrency } from '../hooks/useCurrency';
 import { GACHA_BOXES, getSpecialGachaBoxes, getNormalGachaBoxes, GachaBox } from '../config/gachaConfig';
 
-const { width: screenWidth } = Dimensions.get('window');
+const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
 export default function GachaScreen() {
   const { colorScheme } = useAppTheme();
@@ -19,29 +19,11 @@ export default function GachaScreen() {
   const params = useLocalSearchParams();
   const { canAfford, spendCurrency, addCurrency } = useCurrency();
   
-  const [gachaType, setGachaType] = useState<string>('normal');
-  const [isSpecialOffer, setIsSpecialOffer] = useState<boolean>(false);
-  const [selectedBox, setSelectedBox] = useState<GachaBox | null>(null);
+  const [currentGachaIndex, setCurrentGachaIndex] = useState(0);
   const [isPulling, setIsPulling] = useState<boolean>(false);
+  const flatListRef = useRef<FlatList>(null);
 
-  useEffect(() => {
-    if (params.gachaType) {
-      setGachaType(params.gachaType as string);
-    }
-    if (params.specialOffer) {
-      setIsSpecialOffer(params.specialOffer === 'true');
-    }
-  }, [params]);
-
-  useEffect(() => {
-    if (gachaType !== 'normal') {
-      const specialBoxes = getSpecialGachaBoxes();
-      const targetBox = specialBoxes.find(box => box.id.includes(gachaType));
-      if (targetBox) {
-        setSelectedBox(targetBox);
-      }
-    }
-  }, [gachaType, isSpecialOffer]);
+  const allGachaBoxes = [...getSpecialGachaBoxes(), ...getNormalGachaBoxes()];
 
   const handlePull = async (box: GachaBox) => {
     if (!canAfford(box.cost)) {
@@ -74,232 +56,273 @@ export default function GachaScreen() {
     Alert.alert('通貨獲得', 'ジェムを100個獲得しました！');
   };
 
-  const renderGachaBox = (box: GachaBox) => (
-    <TouchableOpacity
-      key={box.id}
-      style={styles.gachaBoxContainer}
-      onPress={() => handlePull(box)}
-      disabled={isPulling}
-      activeOpacity={0.8}
-    >
-      <LinearGradient
-        colors={box.bgGradient}
-        style={styles.gachaBox}
-      >
-        {box.isSpecial && (
-          <View style={styles.specialBadge}>
-            <Text style={styles.specialBadgeText}>限定</Text>
-          </View>
-        )}
-        
-        <View style={styles.gachaBoxContent}>
-          <Text style={styles.gachaBoxTitle}>{box.name}</Text>
-          <Text style={styles.gachaBoxDescription}>{box.description}</Text>
+  const renderBackgroundSlide = ({ item, index }: { item: GachaBox; index: number }) => {
+    return (
+      <View style={[styles.slideContainer, { width: screenWidth }]}>
+        <ImageBackground
+          source={item.backgroundImage || { uri: 'https://images.unsplash.com/photo-1518709268805-4e9042af2176?w=800&h=600&fit=crop' }}
+          style={styles.backgroundImage}
+          imageStyle={styles.backgroundImageStyle}
+        >
+          {/* Overlay gradient */}
+          <LinearGradient
+            colors={['rgba(0,0,0,0.3)', 'rgba(0,0,0,0.7)']}
+            style={styles.overlay}
+          />
           
-          <View style={styles.costContainer}>
-            <View style={styles.costInfo}>
-              <Text style={styles.costIcon}>💎</Text>
-              <Text style={styles.costAmount}>{box.cost}</Text>
+          {/* Special badge */}
+          {item.isSpecial && (
+            <View style={styles.specialBadge}>
+              <Text style={styles.specialBadgeText}>限定</Text>
             </View>
-            
-            <View style={[styles.pullButton, {
-              backgroundColor: canAfford(box.cost) 
-                ? 'rgba(255,255,255,0.3)' 
-                : 'rgba(255,255,255,0.1)'
-            }]}>
-              <Ionicons 
-                name={box.pullType === 'multi' ? 'gift' : 'sparkles'} 
-                size={20} 
-                color="#fff" 
-              />
-              <Text style={styles.pullButtonText}>
-                {box.pullType === 'multi' ? '10連' : '1回'}
-              </Text>
-            </View>
+          )}
+          
+          {/* Title content only */}
+          <View style={styles.titleSection}>
+            <Text style={styles.gachaTitle}>{item.name}</Text>
+            <Text style={styles.gachaDescription}>{item.description}</Text>
           </View>
-        </View>
-      </LinearGradient>
-    </TouchableOpacity>
-  );
-
-  const specialBoxes = getSpecialGachaBoxes();
-  const normalBoxes = getNormalGachaBoxes();
+        </ImageBackground>
+      </View>
+    );
+  };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#1a1a1a' : '#f5f5f5' }]}>
+    <SafeAreaView style={styles.container}>
       <GrowthHeader showAddButton onAddPress={handleAddCurrency} />
       
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.header}>
-          <Text style={[styles.subtitle, { color: isDark ? '#ccc' : '#666' }]}>
-            新しいテーマや装飾を手に入れよう！
-          </Text>
-        </View>
-
-        {isPulling && (
-          <View style={styles.pullingOverlay}>
-            <LinearGradient
-              colors={['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7']}
-              style={styles.pullingContent}
-            >
-              <Text style={styles.pullingText}>✨ ガチャ中... ✨</Text>
-              <Text style={styles.pullingSubtext}>素敵なアイテムが出ますように！</Text>
-            </LinearGradient>
-          </View>
-        )}
-
-        {specialBoxes.length > 0 && (
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={[styles.sectionTitle, { color: isDark ? '#fff' : '#000' }]}>🌟 期間限定</Text>
-              <View style={styles.limitedBadge}>
-                <Text style={styles.limitedBadgeText}>LIMITED</Text>
-              </View>
-            </View>
-            {specialBoxes.map(renderGachaBox)}
-          </View>
-        )}
-
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: isDark ? '#fff' : '#000' }]}>🎁 通常ガチャ</Text>
-          {normalBoxes.map(renderGachaBox)}
-        </View>
+      <View style={styles.content}>
+        {/* Background slider */}
+        <FlatList
+          ref={flatListRef}
+          data={allGachaBoxes}
+          renderItem={renderBackgroundSlide}
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          onMomentumScrollEnd={(event) => {
+            const index = Math.round(event.nativeEvent.contentOffset.x / screenWidth);
+            setCurrentGachaIndex(index);
+          }}
+          style={styles.flatList}
+        />
         
-        <View style={styles.bottomPadding} />
-      </ScrollView>
+        {/* Fixed UI overlay */}
+        <View style={styles.fixedUIOverlay}>
+          <View style={styles.bottomSection}>
+            {/* Slide indicators */}
+            <View style={styles.slideIndicators}>
+              {allGachaBoxes.map((_, i) => (
+                <View
+                  key={i}
+                  style={[
+                    styles.indicator,
+                    { backgroundColor: i === currentGachaIndex ? '#fff' : 'rgba(255,255,255,0.4)' }
+                  ]}
+                />
+              ))}
+            </View>
+            
+            {/* Action buttons */}
+            <View style={styles.actionButtons}>
+              <View style={styles.costDisplay}>
+                <Text style={styles.costIcon}>💎</Text>
+                <Text style={styles.costText}>{allGachaBoxes[currentGachaIndex]?.cost}</Text>
+              </View>
+              
+              <TouchableOpacity
+                style={[
+                  styles.pullButton,
+                  {
+                    backgroundColor: canAfford(allGachaBoxes[currentGachaIndex]?.cost || 0)
+                      ? (allGachaBoxes[currentGachaIndex]?.isSpecial ? '#FF6B6B' : '#4CAF50')
+                      : 'rgba(255,255,255,0.3)',
+                    opacity: canAfford(allGachaBoxes[currentGachaIndex]?.cost || 0) ? 1 : 0.6
+                  }
+                ]}
+                onPress={() => handlePull(allGachaBoxes[currentGachaIndex])}
+                disabled={!canAfford(allGachaBoxes[currentGachaIndex]?.cost || 0) || isPulling}
+                activeOpacity={0.8}
+              >
+                <Ionicons 
+                  name={allGachaBoxes[currentGachaIndex]?.pullType === 'multi' ? 'gift' : 'sparkles'} 
+                  size={20} 
+                  color="#fff" 
+                />
+                <Text style={styles.pullButtonText}>
+                  {allGachaBoxes[currentGachaIndex]?.pullType === 'multi' ? '10連ガチャ' : '1回ガチャ'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </View>
+
+      {isPulling && (
+        <View style={styles.pullingOverlay}>
+          <View style={styles.pullingContent}>
+            <View style={styles.pullingIcon}>
+              <Ionicons name="sparkles" size={48} color="#4CAF50" />
+            </View>
+            <Text style={styles.pullingText}>
+              ガチャ中...
+            </Text>
+            <Text style={styles.pullingSubtext}>
+              素敵なアイテムが出ますように！
+            </Text>
+          </View>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { 
+  container: {
     flex: 1,
+    backgroundColor: '#000',
   },
   content: {
     flex: 1,
   },
-  header: {
-    paddingHorizontal: 20,
-    paddingBottom: 10,
+  flatList: {
+    flex: 1,
   },
-  subtitle: {
-    fontSize: 16,
-    fontWeight: '500',
-    opacity: 0.8,
+  slideContainer: {
+    flex: 1,
+    height: screenHeight - 200, // Account for header
   },
-  section: {
-    marginBottom: 24,
-    paddingHorizontal: 20,
+  backgroundImage: {
+    flex: 1,
+    justifyContent: 'flex-end',
   },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
+  backgroundImageStyle: {
+    resizeMode: 'cover',
   },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    marginRight: 8,
-  },
-  limitedBadge: {
-    backgroundColor: '#FF4444',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 8,
-  },
-  limitedBadgeText: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  gachaBoxContainer: {
-    marginBottom: 16,
-    borderRadius: 16,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  gachaBox: {
-    padding: 20,
-    minHeight: 140,
-    position: 'relative',
+  overlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
   specialBadge: {
     position: 'absolute',
-    top: 12,
-    right: 12,
-    backgroundColor: 'rgba(255, 68, 68, 0.9)',
+    top: 40,
+    right: 20,
+    backgroundColor: '#FF6B6B',
     paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
   },
   specialBadgeText: {
     color: '#fff',
     fontSize: 12,
     fontWeight: '700',
   },
-  gachaBoxContent: {
+  contentOverlay: {
     flex: 1,
     justifyContent: 'space-between',
+    padding: 20,
   },
-  gachaBoxTitle: {
-    color: '#fff',
-    fontSize: 22,
+  titleSection: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  fixedUIOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+  },
+  gachaTitle: {
+    fontSize: 32,
     fontWeight: '700',
-    marginBottom: 6,
-    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    color: '#fff',
+    textAlign: 'center',
+    marginBottom: 16,
+    textShadowColor: 'rgba(0, 0, 0, 0.8)',
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 4,
   },
-  gachaBoxDescription: {
+  gachaDescription: {
+    fontSize: 16,
     color: '#fff',
-    fontSize: 14,
-    fontWeight: '500',
+    textAlign: 'center',
     opacity: 0.9,
-    marginBottom: 16,
-    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    lineHeight: 22,
+    textShadowColor: 'rgba(0, 0, 0, 0.6)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
   },
-  costContainer: {
+  bottomSection: {
+    paddingBottom: 40,
+  },
+  slideIndicators: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 30,
+    gap: 8,
+  },
+  indicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  actionButtons: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  costInfo: {
+  costDisplay: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 25,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
   },
   costIcon: {
     fontSize: 18,
     marginRight: 6,
   },
-  costAmount: {
-    color: '#fff',
-    fontSize: 16,
+  costText: {
+    fontSize: 18,
     fontWeight: '700',
+    color: '#fff',
   },
   pullButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
     borderRadius: 25,
-    borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.5)',
-    gap: 6,
+    gap: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
   },
   pullButtonText: {
-    color: '#fff',
     fontSize: 16,
     fontWeight: '700',
+    color: '#fff',
   },
   pullingOverlay: {
     position: 'absolute',
@@ -310,25 +333,26 @@ const styles = StyleSheet.create({
     zIndex: 1000,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
   },
   pullingContent: {
     padding: 40,
     borderRadius: 20,
     alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+  },
+  pullingIcon: {
+    marginBottom: 20,
   },
   pullingText: {
-    color: '#fff',
     fontSize: 24,
     fontWeight: '700',
     marginBottom: 8,
+    color: '#000',
   },
   pullingSubtext: {
-    color: '#fff',
     fontSize: 16,
-    opacity: 0.9,
-  },
-  bottomPadding: {
-    height: 20,
+    opacity: 0.8,
+    color: '#666',
   },
 });

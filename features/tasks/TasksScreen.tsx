@@ -32,7 +32,7 @@ export default function TasksScreen() {
   const logic = useTasksScreenLogic();
   const {
     loading, activeTab, sortMode, sortModalVisible,
-    isReordering,
+    isReordering, isTaskReorderMode,
     selectionAnim,
     folderTabLayouts, selectedTabIndex, // ★ currentContentPage の代わりに selectedTabIndex を使用
     pageScrollPosition,
@@ -96,12 +96,14 @@ export default function TasksScreen() {
           </TouchableOpacity>
         </View>
         {!isSelecting && activeTab === 'incomplete' && (
-          <TouchableOpacity style={styles.sortButton} onPress={() => setSortModalVisible(true)} activeOpacity={0.7}>
-            <Text style={styles.sortLabel}>
-              {sortMode === 'deadline' ? t('sort.date') : sortMode === 'custom' ? t('sort.custom') : t('sort.priority')}
-            </Text>
-            <Ionicons name="swap-vertical" size={22} color={subColor} />
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <TouchableOpacity style={styles.sortButton} onPress={() => setSortModalVisible(true)} activeOpacity={0.7}>
+              <Text style={styles.sortLabel}>
+                {sortMode === 'deadline' ? t('sort.date') : t('sort.custom')}
+              </Text>
+              <Ionicons name="swap-vertical" size={22} color={subColor} />
+            </TouchableOpacity>
+          </View>
         )}
       </View>
 
@@ -128,6 +130,10 @@ export default function TasksScreen() {
           noFolderName={noFolderName}
           t={t}
           memoizedPagesData={memoizedPagesData}
+          sortMode={sortMode}
+          isTaskReorderMode={isTaskReorderMode}
+          onTaskReorder={logic.handleTaskReorder}
+          onFolderReorder={logic.handleFolderReorder}
         />
       )}
 
@@ -179,12 +185,6 @@ export default function TasksScreen() {
               <TouchableOpacity onPress={() => handleSortOptionSelect('custom')} activeOpacity={0.7}>
                 <Text style={[styles.modalOption, {color: sortMode === 'custom' ? subColor : (isDark ? '#E0E0E0' : '#222222'), fontWeight: sortMode === 'custom' ? '600' : '400'}]}>
                   {t('sort.custom')}
-                </Text>
-              </TouchableOpacity>
-               <View style={{height: StyleSheet.hairlineWidth, backgroundColor: isDark? '#444': '#DDD'}}/>
-              <TouchableOpacity onPress={() => handleSortOptionSelect('priority')} activeOpacity={0.7}>
-                <Text style={[styles.modalOption, {color: sortMode === 'priority' ? subColor : (isDark ? '#E0E0E0' : '#222222'), fontWeight: sortMode === 'priority' ? '600' : '400'}]}>
-                  {t('sort.priority')}
                 </Text>
               </TouchableOpacity>
               <View style={{height: StyleSheet.hairlineWidth, backgroundColor: isDark? '#444': '#DDD', marginTop: 10, marginBottom: 0 }}/>

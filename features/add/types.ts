@@ -15,6 +15,7 @@ export interface Task {
   deadlineDetails?: DeadlineSettings;
   completedInstanceDates?: string[];
   completedAt?: string; // For non-repeating tasks, UTC ISO8601 string
+  customOrder?: number; // Custom order for sorting
 }
 
 export type Draft = Task;

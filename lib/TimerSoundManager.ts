@@ -31,6 +31,7 @@ export const BUILT_IN_SOUNDS: SoundOption[] = [
 class TimerSoundManager {
   private static instance: TimerSoundManager;
   private currentSound: Audio.Sound | null = null;
+  private isAudioInitialized: boolean = false;
 
   private constructor() {}
 
@@ -119,18 +120,24 @@ class TimerSoundManager {
   }
 
   async initializeAudio(): Promise<void> {
+    if (this.isAudioInitialized) {
+      return;
+    }
+
     try {
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: false,
         staysActiveInBackground: false,
-        interruptionModeIOS: Audio.InterruptionModeIOS.DoNotMix,
+        interruptionModeIOS: Audio.InterruptionModeIOS.MixWithOthers,
         playsInSilentModeIOS: true,
         shouldDuckAndroid: true,
-        interruptionModeAndroid: Audio.InterruptionModeAndroid.DoNotMix,
+        interruptionModeAndroid: Audio.InterruptionModeAndroid.DuckOthers,
         playThroughEarpieceAndroid: false,
       });
+      this.isAudioInitialized = true;
     } catch (error) {
       console.error('Failed to initialize audio:', error);
+      throw error;
     }
   }
 }

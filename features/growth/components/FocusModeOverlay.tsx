@@ -132,7 +132,7 @@ export default function FocusModeOverlay({
               style={styles.controlButton}
               activeOpacity={0.7}
             >
-              <Ionicons name="reload" size={28} color="rgba(255, 255, 255, 0.7)" />
+              <Ionicons name="reload" size={32} color="rgba(255, 255, 255, 0.9)" />
             </TouchableOpacity>
           </View>
         </View>

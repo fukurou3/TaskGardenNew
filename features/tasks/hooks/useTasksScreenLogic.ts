@@ -17,7 +17,7 @@ import i18n from '@/lib/i18n';
 
 const windowWidth = Dimensions.get('window').width;
 
-export type SortMode = 'deadline' | 'custom' | 'priority';
+export type SortMode = 'deadline' | 'custom';
 export type ActiveTab = 'incomplete' | 'completed';
 export type FolderTab = { name: string; label: string };
 export type FolderTabLayout = { x: number; width: number; index: number };
@@ -44,6 +44,7 @@ export const useTasksScreenLogic = () => {
   const [sortModalVisible, setSortModalVisible] = useState(false);
   const [isReordering, setIsReordering] = useState(false);
   const [draggingFolder, setDraggingFolder] = useState<string | null>(null);
+  const [isTaskReorderMode, setIsTaskReorderMode] = useState(false);
   const [renameModalVisible, setRenameModalVisible] = useState(false);
   const [renameTarget, setRenameTarget] = useState<string | null>(null);
 
@@ -180,6 +181,13 @@ export const useTasksScreenLogic = () => {
     selectionAnim.value = withTiming(selectionHook.isSelecting ? 0 : SELECTION_BAR_HEIGHT, { duration: 250 });
   }, [selectionHook.isSelecting, selectionAnim]);
 
+  // Auto-exit task reorder mode when switching tabs or changing from custom sort
+  useEffect(() => {
+    if (isTaskReorderMode && (activeTab !== 'incomplete' || sortMode !== 'custom')) {
+      setIsTaskReorderMode(false);
+    }
+  }, [activeTab, sortMode, isTaskReorderMode]);
+
   // ★ 依存配列を新しい確定状態 selectedTabIndex に変更
   useEffect(() => {
     scrollFolderTabsToCenter(selectedTabIndex);
@@ -211,6 +219,13 @@ export const useTasksScreenLogic = () => {
     }
   };
 
+  // フォルダ別のベースオーダーを計算する関数
+  const getBaseOrderForFolder = useCallback((folderName: string): number => {
+    const folderIndex = folderOrder.findIndex(name => name === folderName);
+    // 存在しないフォルダには一意のベースオーダーを生成
+    return folderIndex >= 0 ? folderIndex * 1000 : (folderOrder.length * 1000) + (folderName.length * 100);
+  }, [folderOrder]);
+
   const toggleTaskDone = useCallback(async (id: string, instanceDateStr?: string) => {
     const newTasks = tasks.map(task => {
       if (task.id === id) {
@@ -226,14 +241,44 @@ export const useTasksScreenLogic = () => {
           }
           return { ...task, completedInstanceDates: newCompletedDates };
         } else {
-          return { ...task, completedAt: task.completedAt ? undefined : dayjs.utc().toISOString() };
+          const wasCompleted = !!task.completedAt;
+          const updatedTask = { 
+            ...task, 
+            completedAt: wasCompleted ? undefined : dayjs.utc().toISOString() 
+          };
+          
+          // customOrder管理: 完了状態変更時の処理
+          if (sortMode === 'custom') {
+            if (!wasCompleted) {
+              // 未完了→完了: customOrderを削除
+              const { customOrder, ...taskWithoutOrder } = updatedTask;
+              return taskWithoutOrder as Task;
+            } else {
+              // 完了→未完了: 新しいcustomOrderを割り当て
+              const folderName = task.folder || noFolderName;
+              const baseOrder = getBaseOrderForFolder(folderName);
+              const folderTasks = tasks.filter(t => 
+                (t.folder || noFolderName) === folderName && 
+                !t.completedAt && 
+                t.id !== id
+              );
+              const maxCustomOrder = folderTasks.reduce((max, t) => {
+                const order = t.customOrder ?? (baseOrder - 10);
+                return Math.max(max, order);
+              }, baseOrder - 10);
+              
+              return { ...updatedTask, customOrder: maxCustomOrder + 10 };
+            }
+          }
+          
+          return updatedTask;
         }
       }
       return task;
     });
     setTasks(newTasks);
     await syncTasksToDatabase(tasks, newTasks);
-  }, [tasks]);
+  }, [tasks, sortMode, noFolderName, getBaseOrderForFolder]);
 
   const moveFolderOrder = useCallback(async (folderName: string, direction: 'up' | 'down') => {
     const idx = folderOrder.indexOf(folderName);
@@ -248,18 +293,44 @@ export const useTasksScreenLogic = () => {
   }, [folderOrder]);
 
   const onLongPressSelectItem = useCallback((type: 'task' | 'folder', id: string) => {
+    // If long-pressing a task and not in custom sort mode, automatically switch to custom sort and task reorder mode
+    if (type === 'task' && sortMode !== 'custom' && activeTab === 'incomplete') {
+      setSortMode('custom');
+      setIsTaskReorderMode(true);
+      return;
+    }
+    
+    // If already in custom sort mode and long-pressing a task, enable task reorder mode
+    if (type === 'task' && sortMode === 'custom' && activeTab === 'incomplete' && !isTaskReorderMode) {
+      setIsTaskReorderMode(true);
+      return;
+    }
+    
+    // Default behavior for folder selection or when already in selection mode
     selectionHook.startSelecting();
     selectionHook.toggleItem({ id, type });
-  }, [selectionHook]);
+  }, [selectionHook, sortMode, activeTab, isTaskReorderMode, setSortMode, setIsTaskReorderMode]);
 
   const cancelSelectionMode = useCallback(() => {
     selectionHook.clearSelection();
-  }, [selectionHook]);
+    // Also exit task reorder mode when canceling selection mode
+    if (isTaskReorderMode) {
+      setIsTaskReorderMode(false);
+    }
+  }, [selectionHook, isTaskReorderMode]);
 
   const stopReordering = useCallback(() => {
       setIsReordering(false);
       setDraggingFolder(null);
   }, []);
+
+  const toggleTaskReorderMode = useCallback(() => {
+    setIsTaskReorderMode(!isTaskReorderMode);
+    if (isTaskReorderMode) {
+      // 並べ替えモード終了時に選択モードもクリア
+      selectionHook.clearSelection();
+    }
+  }, [isTaskReorderMode, selectionHook]);
 
   const baseProcessedTasks: DisplayTaskOriginal[] = useMemo(() => {
     return tasks.map(task => {
@@ -346,7 +417,17 @@ export const useTasksScreenLogic = () => {
                 return;
             }
 
-            const sortedFolderTasks = [...tasksInThisFolder].sort((a, b) => {
+            // パフォーマンス最適化: ソート前に長さをチェック
+            if (tasksInThisFolder.length === 0) {
+                return;
+            }
+            if (tasksInThisFolder.length === 1) {
+                tasksByFolder.set(folderName, tasksInThisFolder);
+                return;
+            }
+
+            // 最適化されたソート処理
+            const sortedFolderTasks = tasksInThisFolder.sort((a, b) => {
                 if (activeTab === 'incomplete' && sortMode === 'deadline') {
                   const today = dayjs.utc().startOf('day');
                   const getCategory = (task: DisplayableTaskItem): number => {
@@ -372,18 +453,21 @@ export const useTasksScreenLogic = () => {
                 }
 
                 if (sortMode === 'custom' && activeTab === 'incomplete') {
-                    const orderA = a.customOrder ?? Infinity;
-                    const orderB = b.customOrder ?? Infinity;
-                    if (orderA !== Infinity || orderB !== Infinity) {
-                        if (orderA === Infinity) return 1;
-                        if (orderB === Infinity) return -1;
-                        return orderA - orderB;
+                    const folderA = a.folder || noFolderName;
+                    const folderB = b.folder || noFolderName;
+                    
+                    // 同じフォルダ内でのcustomOrder比較
+                    if (folderA === folderB) {
+                        const orderA = a.customOrder ?? Infinity;
+                        const orderB = b.customOrder ?? Infinity;
+                        if (orderA !== orderB) {
+                            if (orderA === Infinity) return 1;
+                            if (orderB === Infinity) return -1;
+                            return orderA - orderB;
+                        }
+                        // customOrderが同じ場合はタイトルでソート
+                        return a.title.localeCompare(b.title);
                     }
-                }
-                if (sortMode === 'priority' && activeTab === 'incomplete') {
-                    const priorityA = a.priority ?? -1;
-                    const priorityB = b.priority ?? -1;
-                    if (priorityA !== priorityB) return priorityB - priorityA;
                 }
                 return a.title.localeCompare(b.title);
             });
@@ -638,6 +722,220 @@ export const useTasksScreenLogic = () => {
     }
   }, [selectionHook, noFolderName]);
 
+  // フォルダ削除時のcustomOrderクリーンアップ
+  const cleanupCustomOrdersForDeletedFolder = useCallback(async (deletedFolderName: string) => {
+    const updatedTasks = tasks.map(task => {
+      if ((task.folder || noFolderName) === deletedFolderName) {
+        // 削除されたフォルダのタスクからcustomOrderを削除
+        const { customOrder, ...taskWithoutOrder } = task;
+        return taskWithoutOrder as Task;
+      }
+      return task;
+    });
+
+    if (updatedTasks.some((task, index) => task !== tasks[index])) {
+      setTasks(updatedTasks);
+      await syncTasksToDatabase(tasks, updatedTasks);
+      console.log('CustomOrders cleaned up for deleted folder:', deletedFolderName);
+    }
+  }, [tasks, noFolderName]);
+
+  // フォルダリネーム時のcustomOrder更新
+  const updateCustomOrdersForRenamedFolder = useCallback(async (oldFolderName: string, newFolderName: string) => {
+    const newBaseOrder = getBaseOrderForFolder(newFolderName);
+    const folderTasks = tasks.filter(task => (task.folder || noFolderName) === oldFolderName);
+    
+    if (folderTasks.length === 0) return;
+
+    const updatedTasks = tasks.map(task => {
+      if ((task.folder || noFolderName) === oldFolderName) {
+        const taskIndex = folderTasks.findIndex(t => t.id === task.id);
+        return { 
+          ...task, 
+          folder: newFolderName === noFolderName ? undefined : newFolderName,
+          customOrder: newBaseOrder + (taskIndex * 10)
+        };
+      }
+      return task;
+    });
+
+    setTasks(updatedTasks);
+    await syncTasksToDatabase(tasks, updatedTasks);
+    console.log('CustomOrders updated for renamed folder:', { oldFolderName, newFolderName });
+  }, [tasks, noFolderName, getBaseOrderForFolder]);
+
+  // CustomOrderのクリーンアップと正規化（tasksを依存から除外してループを防ぐ）
+  const normalizeCustomOrdersRef = useRef<(currentTasks: Task[]) => Promise<void>>();
+  
+  normalizeCustomOrdersRef.current = useCallback(async (currentTasks: Task[]) => {
+    const updatedTasks = [...currentTasks];
+    let hasChanges = false;
+
+    // フォルダごとにcustomOrderを正規化
+    const folderGroups = new Map<string, Task[]>();
+    
+    currentTasks.forEach(task => {
+      const folderName = task.folder || noFolderName;
+      if (!folderGroups.has(folderName)) {
+        folderGroups.set(folderName, []);
+      }
+      folderGroups.get(folderName)!.push(task);
+    });
+
+    folderGroups.forEach((folderTasks, folderName) => {
+      const baseOrder = getBaseOrderForFolder(folderName);
+      
+      // customOrderでソートしてインデックスを再割り当て
+      const sortedTasks = folderTasks
+        .sort((a, b) => (a.customOrder ?? Infinity) - (b.customOrder ?? Infinity))
+        .map((task, index) => {
+          const newCustomOrder = baseOrder + (index * 10);
+          if (task.customOrder !== newCustomOrder) {
+            hasChanges = true;
+            return { ...task, customOrder: newCustomOrder };
+          }
+          return task;
+        });
+
+      // 更新されたタスクを反映
+      sortedTasks.forEach(updatedTask => {
+        const taskIndex = updatedTasks.findIndex(t => t.id === updatedTask.id);
+        if (taskIndex >= 0) {
+          updatedTasks[taskIndex] = updatedTask;
+        }
+      });
+    });
+
+    if (hasChanges) {
+      setTasks(updatedTasks);
+      await syncTasksToDatabase(currentTasks, updatedTasks);
+      console.log('CustomOrders normalized');
+    }
+  }, [folderOrder, noFolderName, getBaseOrderForFolder]);
+
+  // sortMode変更時とアプリ起動時にcustomOrderを正規化（1回のみ実行）
+  const normalizeTriggeredRef = useRef(false);
+  
+  useEffect(() => {
+    if (tasks.length > 0 && sortMode === 'custom' && !normalizeTriggeredRef.current) {
+      normalizeTriggeredRef.current = true;
+      normalizeCustomOrdersRef.current?.(tasks);
+    }
+    
+    // sortModeが変更された場合はフラグをリセット
+    return () => {
+      if (sortMode !== 'custom') {
+        normalizeTriggeredRef.current = false;
+      }
+    };
+  }, [sortMode, tasks.length]); // tasksの長さのみを監視
+
+  // 並び替え操作のロック管理（Promise-based lock）
+  const reorderLockRef = useRef<Promise<void> | null>(null);
+
+  const handleTaskReorder = useCallback(async (folderName: string, fromIndex: number, toIndex: number) => {
+    if (fromIndex === toIndex) return;
+
+    // 並び替え操作のロック（前の操作が完了するまで待機）
+    if (reorderLockRef.current) {
+      console.warn('Reorder operation already in progress, waiting...');
+      try {
+        await reorderLockRef.current;
+      } catch (error) {
+        console.error('Previous reorder operation failed:', error);
+      }
+    }
+
+    // 新しいロックを設定
+    let resolveLock: () => void;
+    reorderLockRef.current = new Promise(resolve => { resolveLock = resolve; });
+
+    try {
+      console.log('handleTaskReorder called:', { folderName, fromIndex, toIndex });
+
+      // 現在のソートモードがcustomでない場合は何もしない
+      if (sortMode !== 'custom') {
+        console.warn('Task reordering is only available in custom sort mode');
+        return;
+      }
+
+      // 最新のtasksを取得（stale closureを防ぐ）
+      const currentTasks = tasks;
+
+      // 対象フォルダのタスクを取得（customOrderでソート済み）
+      const targetFolderTasks = currentTasks
+        .filter(task => (task.folder || noFolderName) === folderName)
+        .sort((a, b) => (a.customOrder ?? Infinity) - (b.customOrder ?? Infinity));
+    
+    if (fromIndex < 0 || fromIndex >= targetFolderTasks.length || 
+        toIndex < 0 || toIndex >= targetFolderTasks.length) {
+      console.error('Invalid indices:', { fromIndex, toIndex, length: targetFolderTasks.length });
+      return;
+    }
+
+    // 新しいタスク配列を作成
+    const newTargetTasks = [...targetFolderTasks];
+    
+    // タスクを移動
+    const [movedTask] = newTargetTasks.splice(fromIndex, 1);
+    newTargetTasks.splice(toIndex, 0, movedTask);
+
+    console.log('Task reorder:', {
+      movedTaskId: movedTask.id,
+      movedTaskTitle: movedTask.title,
+      fromIndex,
+      toIndex
+    });
+
+      // フォルダ固有のcustomOrderを更新（1000の倍数ベースで間隔を開ける）
+      const baseOrder = getBaseOrderForFolder(folderName);
+      const updatedTasks = currentTasks.map(task => {
+        if ((task.folder || noFolderName) === folderName) {
+          const newIndex = newTargetTasks.findIndex(t => t.id === task.id);
+          if (newIndex !== -1) {
+            return { ...task, customOrder: baseOrder + (newIndex * 10) };
+          }
+        }
+        return task;
+      });
+
+      setTasks(updatedTasks);
+      await syncTasksToDatabase(currentTasks, updatedTasks);
+      
+      // Auto-exit task reorder mode after successful reorder
+      setTimeout(() => {
+        setIsTaskReorderMode(false);
+      }, 1500); // Give user 1.5 seconds to potentially make another reorder
+      
+    } catch (error) {
+      console.error('Error during task reordering:', error);
+      // エラー時はUI状態も元に戻す
+      throw error;
+    } finally {
+      // ロックを解除
+      resolveLock!();
+      reorderLockRef.current = null;
+    }
+  }, [tasks, noFolderName, sortMode, getBaseOrderForFolder]);
+
+  const handleFolderReorder = useCallback(async (folderName: string, fromIndex: number, toIndex: number) => {
+    if (fromIndex === toIndex) return;
+
+    const newFolderOrder = [...folderOrder];
+    
+    // フォルダオーダーから現在のフォルダを削除
+    const currentFolderIndex = newFolderOrder.indexOf(folderName);
+    if (currentFolderIndex !== -1) {
+      newFolderOrder.splice(currentFolderIndex, 1);
+    }
+    
+    // 新しい位置に挿入
+    newFolderOrder.splice(toIndex, 0, folderName);
+
+    setFolderOrder(newFolderOrder);
+    await saveFolderOrderToStorage(newFolderOrder);
+  }, [folderOrder]);
+
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
     try {
@@ -656,7 +954,7 @@ export const useTasksScreenLogic = () => {
 
   return {
     tasks, folderOrder, loading, activeTab, selectedFolderTabName, sortMode, sortModalVisible,
-    isReordering, draggingFolder, renameModalVisible, renameTarget,
+    isReordering, draggingFolder, isTaskReorderMode, renameModalVisible, renameTarget,
     selectionAnim, folderTabLayouts, selectedTabIndex, // ★ currentContentPage の代わりに selectedTabIndex を返す
     pageScrollPosition,
     noFolderName, folderTabs,
@@ -669,13 +967,18 @@ export const useTasksScreenLogic = () => {
     setIsReordering, setDraggingFolder, setRenameModalVisible, setRenameTarget,
     setFolderTabLayouts,
     toggleTaskDone,
-    moveFolderOrder, stopReordering,
+    moveFolderOrder, stopReordering, toggleTaskReorderMode,
     onLongPressSelectItem, cancelSelectionMode,
     handleFolderTabPress, handlePageSelected, handlePageScroll,
     handleSelectAll, handleDeleteSelected, confirmDelete,
 
     handleRenameFolderSubmit, handleReorderSelectedFolder, openRenameModalForSelectedFolder,
+    handleTaskReorder,
+    handleFolderReorder,
     handleRefresh,
+    // フォルダ操作用のクリーンアップ関数を公開
+    cleanupCustomOrdersForDeletedFolder,
+    updateCustomOrdersForRenamedFolder,
     router, t,
   };
 };

@@ -1,12 +1,23 @@
 // app/features/tasks/components/TaskItem.tsx
-import React, { useContext, useState, useEffect, useMemo, useRef, memo } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, TextStyle } from 'react-native';
+import React, { useContext, useMemo, memo, useState, useEffect, useRef } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, TextStyle, Vibration } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
 import timezone from 'dayjs/plugin/timezone';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import { useRouter } from 'expo-router';
+import Animated, { 
+  useSharedValue, 
+  useAnimatedStyle, 
+  useAnimatedGestureHandler, 
+  withSpring, 
+  withTiming,
+  withDelay,
+  runOnJS,
+  interpolate
+} from 'react-native-reanimated';
+import { PanGestureHandler } from 'react-native-gesture-handler';
 
 import { DisplayableTaskItem } from '../types';
 import { createStyles } from '../styles';
@@ -179,6 +190,19 @@ type Props = {
   currentTab: 'incomplete' | 'completed';
   isInsideFolder?: boolean;
   isLastItem?: boolean;
+  isDraggable?: boolean;
+  onDragStart?: (id: string) => void;
+  onDragActive?: (id: string, translationY: number) => void;
+  onDragEnd?: (id: string, newIndex: number) => void;
+  onMoveUp?: (id: string) => void;
+  onMoveDown?: (id: string) => void;
+  canMoveUp?: boolean;
+  canMoveDown?: boolean;
+  currentIndex?: number;
+  totalItems?: number;
+  isDragging?: boolean;
+  shouldMoveUp?: boolean;
+  shouldMoveDown?: boolean;
 };
 
 export const TaskItem = memo(({
@@ -190,12 +214,167 @@ export const TaskItem = memo(({
   currentTab,
   isInsideFolder,
   isLastItem,
+  isDraggable = false,
+  onDragStart,
+  onDragActive,
+  onDragEnd,
+  onMoveUp,
+  onMoveDown,
+  canMoveUp = false,
+  canMoveDown = false,
+  currentIndex = 0,
+  totalItems = 1,
+  isDragging = false,
+  shouldMoveUp = false,
+  shouldMoveDown = false,
 }: Props) => {
   const { colorScheme, subColor } = useAppTheme();
   const isDark = colorScheme === 'dark';
   const { fontSizeKey } = useContext(FontSizeContext);
   const styles = createStyles(isDark, subColor, fontSizeKey);
   const router = useRouter();
+
+  // シンプルなドラッグアニメーション用の値
+  const translateY = useSharedValue(0);
+  const scale = useSharedValue(1);
+  const opacity = useSharedValue(1);
+  const elevation = useSharedValue(0);
+  
+  // 他のタスクの位置調整用の値
+  const offsetY = useSharedValue(0);
+  
+  // 長押し検出用
+  const longPressTimer = useRef<NodeJS.Timeout | null>(null);
+  const isDragEnabled = useSharedValue(false);
+  const gestureStartTime = useSharedValue(0);
+  
+  // ハプティックフィードバック関数
+  const triggerHaptic = () => {
+    try {
+      Vibration.vibrate(30); // 軽い振動（30ms）
+    } catch (error) {
+      console.log('Haptic feedback not available');
+    }
+  };
+  
+  // フォルダ内での控えめな移動（枠を拡張させない）
+  useEffect(() => {
+    if (shouldMoveUp) {
+      // Google Todo風の微細な移動
+      offsetY.value = withSpring(-8, { damping: 20, stiffness: 400 });
+    } else if (shouldMoveDown) {
+      // Google Todo風の微細な移動
+      offsetY.value = withSpring(8, { damping: 20, stiffness: 400 });
+    } else {
+      // 元の位置に戻る
+      offsetY.value = withSpring(0, { damping: 20, stiffness: 400 });
+    }
+  }, [shouldMoveUp, shouldMoveDown, offsetY]);
+
+  const gestureHandler = useAnimatedGestureHandler({
+    onStart: (event) => {
+      gestureStartTime.value = Date.now();
+      isDragEnabled.value = false;
+    },
+    onActive: (event) => {
+      const currentTime = Date.now();
+      const timeSinceStart = currentTime - gestureStartTime.value;
+      
+      // 長押し閾値（500ms）を超えた場合のみドラッグを有効化
+      if (timeSinceStart >= 500 && !isDragEnabled.value && isDraggable) {
+        isDragEnabled.value = true;
+        
+        if (onDragStart) {
+          // Google Todo風のドラッグエフェクト
+          scale.value = withSpring(1.02, { damping: 15, stiffness: 300 });
+          elevation.value = withTiming(4, { duration: 150 });
+          opacity.value = withTiming(0.95, { duration: 150 });
+          runOnJS(triggerHaptic)();
+          runOnJS(onDragStart)(task.keyId);
+        }
+      }
+      
+      // ドラッグが有効化されている場合のみ移動を追従
+      if (isDragEnabled.value && isDraggable) {
+        translateY.value = event.translationY;
+        
+        if (onDragActive) {
+          runOnJS(onDragActive)(task.keyId, event.translationY);
+        }
+      }
+    },
+    onEnd: (event) => {
+      if (isDragEnabled.value && isDraggable && onDragEnd) {
+        // 標準的なドラッグ終了計算
+        const itemHeight = 70;
+        const movement = event.translationY;
+        
+        // シンプルなインデックス計算
+        const indexOffset = Math.round(movement / itemHeight);
+        let newIndex = currentIndex + indexOffset;
+        newIndex = Math.max(0, Math.min(totalItems - 1, newIndex));
+        
+        console.log('Drag calculation:', { 
+          movement, 
+          currentIndex, 
+          newIndex, 
+          itemHeight, 
+          totalItems 
+        });
+        
+        // 位置が変更された場合のみハプティックフィードバック
+        if (newIndex !== currentIndex) {
+          runOnJS(triggerHaptic)();
+        }
+        
+        // データ更新を実行
+        runOnJS(onDragEnd)(task.keyId, newIndex);
+      }
+      
+      // 常にアニメーションリセット
+      translateY.value = withSpring(0, { damping: 20, stiffness: 300 });
+      scale.value = withSpring(1, { damping: 15, stiffness: 300 });
+      elevation.value = withTiming(0, { duration: 200 });
+      opacity.value = withTiming(1, { duration: 200 });
+      
+      // フラグをリセット
+      isDragEnabled.value = false;
+      gestureStartTime.value = 0;
+    },
+  });
+
+  const animatedStyle = useAnimatedStyle(() => {
+    'worklet';
+    return {
+      transform: [
+        { translateY: isDragging ? translateY.value : offsetY.value },
+        { scale: scale.value }
+      ] as any,
+      opacity: isDragging ? opacity.value : 1.0,
+      elevation: elevation.value,
+      shadowOpacity: interpolate(elevation.value, [0, 10], [0, 0.4]),
+      shadowRadius: interpolate(elevation.value, [0, 10], [0, 12]),
+      shadowColor: '#000000',
+      shadowOffset: {
+        width: 0,
+        height: interpolate(elevation.value, [0, 10], [0, 6])
+      },
+      zIndex: isDragging ? 1000 : (offsetY.value !== 0 ? 100 : 0),
+    };
+  });
+
+  // Google Todo風のドロップインジケーター
+  const dropZoneStyle = useAnimatedStyle(() => {
+    'worklet';
+    const showDropZone = shouldMoveUp || shouldMoveDown;
+    return {
+      height: showDropZone ? withSpring(2, { damping: 20, stiffness: 400 }) : withSpring(0, { damping: 20, stiffness: 400 }),
+      opacity: showDropZone ? withSpring(0.8, { damping: 20, stiffness: 400 }) : withSpring(0, { damping: 20, stiffness: 400 }),
+      backgroundColor: showDropZone ? '#1A73E8' : 'transparent',
+      marginHorizontal: showDropZone ? 16 : 0,
+      borderRadius: 1,
+    };
+  });
 
   const effectiveDueDateUtc = useMemo(() => {
     if (task.isCompletedInstance && task.instanceDate) {
@@ -237,6 +416,78 @@ export const TaskItem = memo(({
     task.isCompletedInstance && isLastItem && { borderBottomWidth: 0 }
   ]);
 
+  const taskContent = (
+    <View style={styles.taskItem}>
+      {!isSelecting && (
+        <TaskCheckbox
+          isDone={isCurrentDisplayInstanceDone}
+          onToggle={handleToggle}
+          subColor={subColor}
+          styles={styles}
+        />
+      )}
+      <TaskMainContent
+        task={task}
+        isDark={isDark}
+        fontSizeKey={fontSizeKey}
+        styles={styles}
+      />
+      <TaskDeadline
+        task={task}
+        isDark={isDark}
+        fontSizeKey={fontSizeKey}
+        currentTab={currentTab}
+      />
+      {isSelecting && (
+        <TaskSelectionIndicator
+          isSelected={isSelected}
+          subColor={subColor}
+          styles={styles}
+        />
+      )}
+    </View>
+  );
+
+  if (isDraggable) {
+    return (
+      <>
+        {/* コンパクトなドロップインジケーター */}
+        <Animated.View 
+          style={[
+            dropZoneStyle,
+            {
+              backgroundColor: isDark ? 'rgba(0, 122, 255, 0.4)' : 'rgba(0, 122, 255, 0.4)',
+              borderRadius: 3,
+              marginHorizontal: 20,
+            }
+          ]} 
+        />
+        
+        <Animated.View style={[animatedStyle]}>
+          <PanGestureHandler 
+            onGestureEvent={gestureHandler}
+            activeOffsetY={[-5, 5]}
+            failOffsetX={[-20, 20]}
+            shouldCancelWhenOutside={false}
+            enableTrackpadTwoFingerGesture={false}
+            minPointers={1}
+            minDist={0}
+          >
+            <Animated.View>
+              <TouchableOpacity
+                onPress={handlePress}
+                style={itemContainerStyle}
+                disabled={isSelecting ? false : task.isCompletedInstance}
+              >
+                {taskContent}
+              </TouchableOpacity>
+            </Animated.View>
+          </PanGestureHandler>
+        </Animated.View>
+      </>
+    );
+  }
+
   return (
     <TouchableOpacity
       onPress={handlePress}
@@ -245,35 +496,7 @@ export const TaskItem = memo(({
       style={itemContainerStyle}
       disabled={isSelecting ? false : task.isCompletedInstance}
     >
-      <View style={styles.taskItem}>
-        {!isSelecting && (
-          <TaskCheckbox
-            isDone={isCurrentDisplayInstanceDone}
-            onToggle={handleToggle}
-            subColor={subColor}
-            styles={styles}
-          />
-        )}
-        <TaskMainContent
-          task={task}
-          isDark={isDark}
-          fontSizeKey={fontSizeKey}
-          styles={styles}
-        />
-        <TaskDeadline
-          task={task}
-          isDark={isDark}
-          fontSizeKey={fontSizeKey}
-          currentTab={currentTab}
-        />
-        {isSelecting && (
-          <TaskSelectionIndicator
-            isSelected={isSelected}
-            subColor={subColor}
-            styles={styles}
-          />
-        )}
-      </View>
+      {taskContent}
     </TouchableOpacity>
   );
 });

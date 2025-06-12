@@ -88,6 +88,34 @@ export const useSaveTask = ({
 }: SaveTaskParams) => {
   const router = useRouter();
 
+  // 新規タスク用のcustomOrderを計算（簡易版）
+  const calculateNextCustomOrder = useCallback(async (targetFolder: string | undefined) => {
+    try {
+      // 既存タスクとフォルダオーダーを取得
+      const tasks = await TasksDatabase.getAllTasks() as Task[];
+      const folderOrderData = await getItem('@folderOrder');
+      const folderOrder = folderOrderData ? JSON.parse(folderOrderData) : [];
+      const noFolderName = 'フォルダなし';
+      
+      const folderName = targetFolder || noFolderName;
+      const folderIndex = folderOrder.findIndex((name: string) => name === folderName);
+      const baseOrder = folderIndex >= 0 ? folderIndex * 1000 : (folderOrder.length * 1000) + (folderName.length * 100);
+      
+      // 同じフォルダの既存タスクの最大customOrderを取得
+      const folderTasks = tasks.filter(task => (task.folder || noFolderName) === folderName);
+      const maxCustomOrder = folderTasks.reduce((max, task) => {
+        const order = task.customOrder ?? (baseOrder - 10);
+        return Math.max(max, order);
+      }, baseOrder - 10);
+      
+      return maxCustomOrder + 10;
+    } catch (error) {
+      console.error('Failed to calculate customOrder:', error);
+      // エラー時はデフォルト値を返す
+      return 0;
+    }
+  }, []);
+
   const saveTask = useCallback(async () => {
     if (!title.trim()) {
       Alert.alert(t('add_task.alert_no_title'));
@@ -118,6 +146,7 @@ export const useSaveTask = ({
       deadlineDetails: finalDeadlineDetails,
       completedInstanceDates: [],
       completedAt: undefined,
+      customOrder: await calculateNextCustomOrder(folder),
     };
 
     try {

@@ -1,5 +1,5 @@
 // app/features/tasks/components/TaskFolder.tsx
-import React, { useContext } from 'react';
+import React, { useContext, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, FlatList } from 'react-native'; // FlatListは前回導入済みのはず
 import { Ionicons } from '@expo/vector-icons';
 import { DisplayableTaskItem } from '../types';
@@ -27,6 +27,12 @@ export interface Props {
   selectedIds: string[];
   onLongPressSelect: (type: 'task' | 'folder', id: string) => void;
   currentTab: 'incomplete' | 'completed';
+  sortMode?: 'deadline' | 'custom';
+  isTaskReorderMode?: boolean;
+  onTaskReorder?: (folderName: string, fromIndex: number, toIndex: number) => void;
+  onFolderReorder?: (folderName: string, fromIndex: number, toIndex: number) => void;
+  folderIndex?: number;
+  totalFolders?: number;
 }
 
 export const TaskFolder: React.FC<Props> = ({
@@ -45,6 +51,12 @@ export const TaskFolder: React.FC<Props> = ({
   selectedIds,
   onLongPressSelect,
   currentTab,
+  sortMode = 'deadline',
+  isTaskReorderMode = false,
+  onTaskReorder,
+  onFolderReorder,
+  folderIndex = 0,
+  totalFolders = 1,
 }) => {
   const { colorScheme, subColor } = useAppTheme();
   const isDark = colorScheme === 'dark';
@@ -52,14 +64,45 @@ export const TaskFolder: React.FC<Props> = ({
   const styles = createStyles(isDark, subColor, fontSizeKey);
   const { t } = useTranslation();
   const baseFontSize = fontSizes[fontSizeKey];
+  const noFolderName = t('common.no_folder_name', 'フォルダなし');
 
   const isFolderSelected = isSelecting && selectedIds.includes(folderName);
+  
+  // ドラッグ状態管理
+  const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
-  const handleLongPress = () => {
-    if (folderName) {
-        onLongPressSelect('folder', folderName);
+  const isDraggableMode = sortMode === 'custom' && currentTab === 'incomplete' && !isSelecting && tasks.length > 1 && isTaskReorderMode;
+  const isFolderDraggable = sortMode === 'custom' && currentTab === 'incomplete' && !isSelecting && totalFolders > 1 && folderName !== noFolderName && isTaskReorderMode;
+
+  const handleTaskReorderUp = (taskId: string) => {
+    const currentIndex = tasks.findIndex(task => task.keyId === taskId);
+    if (currentIndex > 0 && onTaskReorder) {
+      onTaskReorder(folderName, currentIndex, currentIndex - 1);
     }
   };
+
+  const handleTaskReorderDown = (taskId: string) => {
+    const currentIndex = tasks.findIndex(task => task.keyId === taskId);
+    if (currentIndex < tasks.length - 1 && onTaskReorder) {
+      onTaskReorder(folderName, currentIndex, currentIndex + 1);
+    }
+  };
+
+  // handleToggleReorderMode削除
+
+  const handleFolderReorderUp = () => {
+    if (folderIndex > 0 && onFolderReorder) {
+      onFolderReorder(folderName, folderIndex, folderIndex - 1);
+    }
+  };
+
+  const handleFolderReorderDown = () => {
+    if (folderIndex < totalFolders - 1 && onFolderReorder) {
+      onFolderReorder(folderName, folderIndex, folderIndex + 1);
+    }
+  };
+
 
   const handlePressFolder = () => {
     if (isSelecting && folderName) {
@@ -71,27 +114,103 @@ export const TaskFolder: React.FC<Props> = ({
     }
   };
 
-  const renderTaskItem = ({ item, index }: { item: DisplayableTaskItem, index: number }) => (
-    <TaskItem
-      key={item.keyId}
-      task={item}
-      onToggle={onToggleTaskDone}
-      isSelecting={isSelecting}
-      selectedIds={selectedIds}
-      onLongPressSelect={(id) => onLongPressSelect('task',id)}
-      currentTab={currentTab}
-      isInsideFolder={true}
-      isLastItem={index === tasks.length - 1}
-    />
-  );
+  const handleTaskDragStart = (taskId: string) => {
+    setDraggingTaskId(taskId);
+    setDragOverIndex(null);
+  };
+
+  const handleTaskDragActive = (taskId: string, translationY: number) => {
+    if (draggingTaskId !== taskId) return;
+    
+    const itemHeight = 70;
+    const currentIndex = tasks.findIndex(task => task.keyId === taskId);
+    
+    // 標準的なドラッグ位置計算
+    const indexOffset = Math.round(translationY / itemHeight);
+    let newIndex = currentIndex + indexOffset;
+    newIndex = Math.max(0, Math.min(tasks.length - 1, newIndex));
+    
+    // インデックスが変更された場合のみ更新
+    if (newIndex !== dragOverIndex) {
+      setDragOverIndex(newIndex);
+    }
+  };
+
+  const handleTaskDragEnd = async (taskId: string, newIndex: number) => {
+    const currentIndex = tasks.findIndex(task => task.keyId === taskId);
+    
+    try {
+      if (currentIndex === -1 || currentIndex === newIndex) return;
+
+      console.log('Task drag end:', { taskId, currentIndex, newIndex });
+      
+      if (onTaskReorder) {
+        await onTaskReorder(folderName, currentIndex, newIndex);
+      }
+    } catch (error) {
+      console.error('Failed to reorder task:', error);
+      // エラー時はUIを元の状態に戻すため、強制的にリフレッシュを促す
+      // 実際のプロダクションではtoastやアラートでユーザーに通知
+    } finally {
+      // 成功・失敗に関わらずドラッグ状態をリセット
+      setDraggingTaskId(null);
+      setDragOverIndex(null);
+    }
+  };
+
+  const renderTaskItem = ({ item, index }: { item: DisplayableTaskItem, index: number }) => {
+    const isDragging = draggingTaskId === item.keyId;
+    const currentDragIndex = tasks.findIndex(t => t.keyId === draggingTaskId);
+    
+    // 一般的なドラッグ&ドロップ：ドラッグ中に影響を受けるタスクが事前移動
+    let shouldMoveUp = false;
+    let shouldMoveDown = false;
+    
+    if (dragOverIndex !== null && !isDragging && currentDragIndex !== -1) {
+      if (dragOverIndex !== currentDragIndex) {
+        if (dragOverIndex > currentDragIndex) {
+          // ドラッグアイテムが下に移動：間のアイテムが上に詰めてスペースを作る
+          shouldMoveUp = index > currentDragIndex && index <= dragOverIndex;
+        } else {
+          // ドラッグアイテムが上に移動：間のアイテムが下に押し出されてスペースを作る
+          shouldMoveDown = index >= dragOverIndex && index < currentDragIndex;
+        }
+      }
+    }
+    
+    return (
+      <TaskItem
+        key={item.keyId}
+        task={item}
+        onToggle={onToggleTaskDone}
+        isSelecting={isSelecting}
+        selectedIds={selectedIds}
+        onLongPressSelect={(id) => onLongPressSelect('task',id)}
+        currentTab={currentTab}
+        isInsideFolder={true}
+        isLastItem={index === tasks.length - 1}
+        isDraggable={isDraggableMode}
+        onDragStart={handleTaskDragStart}
+        onDragActive={handleTaskDragActive}
+        onDragEnd={handleTaskDragEnd}
+        onMoveUp={handleTaskReorderUp}
+        onMoveDown={handleTaskReorderDown}
+        canMoveUp={index > 0}
+        canMoveDown={index < tasks.length - 1}
+        currentIndex={index}
+        totalItems={tasks.length}
+        isDragging={isDragging}
+        shouldMoveUp={shouldMoveUp}
+        shouldMoveDown={shouldMoveDown}
+      />
+    );
+  };
 
   return (
     <View style={styles.folderContainer}>
       {folderName && (
         <TouchableOpacity
           onPress={handlePressFolder}
-          onLongPress={handleLongPress}
-          delayLongPress={200}
           style={[
             styles.folderHeader,
             isFolderSelected && styles.folderHeaderSelected,
@@ -119,8 +238,52 @@ export const TaskFolder: React.FC<Props> = ({
             <Text style={styles.folderName} numberOfLines={1}>{folderName}</Text>
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            {/* ... (並べ替えボタンのロジックは変更なし) ... */}
-            {isReordering && draggingFolder !== folderName && folderName !== t('common.no_folder_name', 'フォルダなし') && (
+            {/* ドットメニューボタン - 無効化
+            {!isReordering && !isFolderDraggable && folderName && (
+              <TouchableOpacity 
+                onPress={handleLongPress}
+                style={styles.menuButton}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons 
+                  name="ellipsis-horizontal" 
+                  size={18} 
+                  color={isDark ? '#E0E0E0' : '#666666'} 
+                />
+              </TouchableOpacity>
+            )}
+            */}
+            
+            {/* フォルダの並べ替えボタン（カスタムモード時） */}
+            {isFolderDraggable && (
+              <View style={styles.reorderButtonsContainer}>
+                <TouchableOpacity 
+                  style={[styles.reorderButton, folderIndex === 0 && styles.reorderButtonDisabled]}
+                  onPress={handleFolderReorderUp}
+                  disabled={folderIndex === 0}
+                >
+                  <Ionicons 
+                    name="chevron-up" 
+                    size={16} 
+                    color={folderIndex === 0 ? (isDark ? '#5A5A5A' : '#C7C7CC') : subColor} 
+                  />
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={[styles.reorderButton, folderIndex >= totalFolders - 1 && styles.reorderButtonDisabled]}
+                  onPress={handleFolderReorderDown}
+                  disabled={folderIndex >= totalFolders - 1}
+                >
+                  <Ionicons 
+                    name="chevron-down" 
+                    size={16} 
+                    color={folderIndex >= totalFolders - 1 ? (isDark ? '#5A5A5A' : '#C7C7CC') : subColor} 
+                  />
+                </TouchableOpacity>
+              </View>
+            )}
+            
+            {/* 既存の並べ替えボタン（編集モード時） */}
+            {isReordering && draggingFolder !== folderName && folderName !== noFolderName && (
               <>
                 <TouchableOpacity onPress={() => moveFolder(folderName, 'up')} style={styles.reorderButton}>
                   <Ionicons name="arrow-up" size={20} color={subColor} />
@@ -130,7 +293,7 @@ export const TaskFolder: React.FC<Props> = ({
                 </TouchableOpacity>
               </>
             )}
-             {isReordering && draggingFolder === folderName && folderName !== t('common.no_folder_name', 'フォルダなし') && (
+             {isReordering && draggingFolder === folderName && folderName !== noFolderName && (
                 <TouchableOpacity onPress={stopReordering} style={styles.reorderButton}>
                   <Text style={{color: subColor}}>{t('common.done')}</Text>
                 </TouchableOpacity>
@@ -141,12 +304,18 @@ export const TaskFolder: React.FC<Props> = ({
 
       {/* isCollapsed の条件を削除し、tasks.length > 0 の場合のみ FlatList を表示 */}
       {tasks.length > 0 && (
-        <FlatList
-          data={tasks}
-          renderItem={renderTaskItem}
-          keyExtractor={(item) => item.keyId}
-          // ここに FlatList の他の props を追加できます
-        />
+        <View style={{ overflow: 'hidden' }}>
+          <FlatList
+            data={tasks}
+            renderItem={renderTaskItem}
+            keyExtractor={(item) => item.keyId}
+            scrollEnabled={false}
+            showsVerticalScrollIndicator={false}
+            removeClippedSubviews={false}
+            style={{ flexShrink: 1 }}
+            contentContainerStyle={{ flexGrow: 0 }}
+          />
+        </View>
       )}
 
       {/* isCollapsed の条件を削除 */}

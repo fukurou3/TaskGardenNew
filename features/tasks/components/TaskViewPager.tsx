@@ -28,6 +28,10 @@ type TaskViewPagerProps = {
   noFolderName: string;
   t: (key: string, options?: any) => string;
   memoizedPagesData: Map<string, MemoizedPageData>;
+  sortMode?: 'deadline' | 'custom';
+  isTaskReorderMode?: boolean;
+  onTaskReorder?: (folderName: string, fromIndex: number, toIndex: number) => void;
+  onFolderReorder?: (folderName: string, fromIndex: number, toIndex: number) => void;
 };
 
 const windowWidth = Dimensions.get('window').width;
@@ -52,6 +56,10 @@ export const TaskViewPager: React.FC<TaskViewPagerProps> = ({
   noFolderName,
   t,
   memoizedPagesData,
+  sortMode = 'deadline',
+  isTaskReorderMode = false,
+  onTaskReorder,
+  onFolderReorder,
 }) => {
   const renderPageContent = (pageFolderName: string, pageIndex: number) => {
     const pageData = memoizedPagesData.get(pageFolderName);
@@ -62,7 +70,7 @@ export const TaskViewPager: React.FC<TaskViewPagerProps> = ({
 
     return (
       <View key={`page-${pageFolderName}-${pageIndex}`} style={{ width: windowWidth, flex: 1, paddingTop: 8, paddingBottom: isSelecting ? SELECTION_BAR_HEIGHT + 20 : 100 }}>
-          {foldersToRender.map(folderName => {
+          {foldersToRender.map((folderName, folderIndex) => {
             const sortedFolderTasks = tasksByFolder.get(folderName) || [];
             if (activeTab === 'completed' && sortedFolderTasks.length === 0) {
               return null;
@@ -80,6 +88,12 @@ export const TaskViewPager: React.FC<TaskViewPagerProps> = ({
               selectedIds: selectedItems.map(it => it.id),
               onLongPressSelect: onLongPressSelectItem,
               currentTab: activeTab,
+              sortMode,
+              isTaskReorderMode,
+              onTaskReorder,
+              onFolderReorder,
+              folderIndex,
+              totalFolders: foldersToRender.length,
             };
             return <TaskFolder key={`${pageFolderName}-${folderName}-${pageIndex}`} {...taskFolderProps} />;
           })}
