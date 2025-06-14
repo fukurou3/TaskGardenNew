@@ -32,7 +32,7 @@ export default function TasksScreen() {
   const logic = useTasksScreenLogic();
   const {
     loading, activeTab, sortMode, sortModalVisible,
-    isReordering, isTaskReorderMode,
+    reorderMode,
     selectionAnim,
     folderTabLayouts, selectedTabIndex, // ★ currentContentPage の代わりに selectedTabIndex を使用
     pageScrollPosition,
@@ -119,7 +119,7 @@ export default function TasksScreen() {
           handlePageScroll={handlePageScroll}
           activeTab={activeTab}
           toggleTaskDone={toggleTaskDone}
-          isReordering={isReordering}
+          isReordering={reorderMode === 'folder'}
           draggingFolder={draggingFolder}
           setDraggingFolder={setDraggingFolder}
           moveFolderOrder={moveFolderOrder}
@@ -131,13 +131,13 @@ export default function TasksScreen() {
           t={t}
           memoizedPagesData={memoizedPagesData}
           sortMode={sortMode}
-          isTaskReorderMode={isTaskReorderMode}
+          isTaskReorderMode={reorderMode === 'task'}
           onTaskReorder={logic.handleTaskReorder}
           onFolderReorder={logic.handleFolderReorder}
         />
       )}
 
-      {!isSelecting && !isReordering && (
+      {!isSelecting && reorderMode !== 'folder' && (
         <TouchableOpacity
           style={[styles.fab, { bottom: Platform.OS === 'ios' ? 16 : 16 }]}
           onPress={() => router.push('/add/')}
