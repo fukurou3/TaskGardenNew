@@ -211,6 +211,7 @@ export const TaskFolder: React.FC<Props> = ({
       {folderName && (
         <TouchableOpacity
           onPress={handlePressFolder}
+          onLongPress={() => onLongPressSelect('folder', folderName)}
           style={[
             styles.folderHeader,
             isFolderSelected && styles.folderHeaderSelected,
