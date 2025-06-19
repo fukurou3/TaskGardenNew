@@ -5,7 +5,8 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { getItem } from '@/lib/Storage';
 import TasksDatabase from '@/lib/TaskDatabase';
 import { Gesture, GestureDetector, Directions } from 'react-native-gesture-handler';
-import Animated, { useSharedValue, withTiming, runOnJS, useAnimatedStyle, Easing } from 'react-native-reanimated';
+// Temporarily disabled reanimated
+// import Animated, { useSharedValue, withTiming, runOnJS, useAnimatedStyle, Easing } from 'react-native-reanimated';
 import PagerView, { type PagerViewOnPageSelectedEvent } from 'react-native-pager-view';
 import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
@@ -43,7 +44,8 @@ export default function CalendarPage() {
 
   const [displayMonth, setDisplayMonth] = useState<dayjs.Dayjs>(() => dayjs());
   const [backgroundImage, setBackgroundImage] = useState<number | null>(null);
-  const opacity = useSharedValue(1);
+  // Mock shared value since Reanimated is disabled
+  const opacity = { value: 1 };
 
   const [tasks, setTasks] = useState<Task[]>([]);
   const [selectedDate, setSelectedDate] = useState<string>(dayjs().format('YYYY-MM-DD'));
@@ -110,22 +112,18 @@ export default function CalendarPage() {
     return Math.ceil((startDayOfWeek + daysInMonth) / 7);
   }, []);
 
-  const calendarHeight = useSharedValue(getCalendarHeight('list', displayMonth));
+  // Simplified without animation
+  const [calendarHeightState, setCalendarHeightState] = useState(getCalendarHeight('list', displayMonth));
 
-  // displayMonthやviewTypeが変わった時にも高さを更新
+  // Update height when displayMonth or viewType changes
   useEffect(() => {
     const newHeight = getCalendarHeight(viewType, displayMonth);
-    calendarHeight.value = withTiming(newHeight, { 
-      duration: 200,
-      easing: Easing.out(Easing.cubic)
-    });
-  }, [displayMonth, viewType, getCalendarHeight, calendarHeight]);
+    setCalendarHeightState(newHeight);
+  }, [displayMonth, viewType, getCalendarHeight]);
   
-  const animatedCalendarStyle = useAnimatedStyle(() => {
-    return {
-      height: calendarHeight.value,
-    };
-  });
+  const calendarStyle = {
+    height: calendarHeightState,
+  };
   // ----------------------------------------------------
 
   useFocusEffect(
@@ -245,22 +243,18 @@ export default function CalendarPage() {
       }
   }, [displayMonth]);
 
-  // --- 変更点：toggleViewJsをアニメーションに対応させる ---
+  // Simplified toggle without animation
   const toggleViewJs = () => {
     setViewType(v => {
       const newType = v === 'list' ? 'full' : 'list';
       const newHeight = getCalendarHeight(newType, displayMonth);
-      calendarHeight.value = withTiming(newHeight, { 
-        duration: 350,
-        easing: Easing.out(Easing.cubic),
-      });
+      setCalendarHeightState(newHeight);
       return newType;
     });
   };
 
   const toggleView = useCallback(() => {
-    'worklet';
-    runOnJS(toggleViewJs)();
+    toggleViewJs();
   }, [toggleViewJs]);
 
   const flingUp = Gesture.Fling().direction(Directions.UP).onEnd(() => toggleView());
@@ -345,10 +339,10 @@ export default function CalendarPage() {
             </View>
       </View>
       
-      {/* --- 変更点：Animated.Viewでラップする --- */}
-      <Animated.View style={[
+      {/* Simplified calendar container */}
+      <View style={[
         styles.calendarContainer,
-        animatedCalendarStyle,
+        calendarStyle,
         viewType === 'full' ? styles.fullCalendarContainer : {},
       ]}>
         <GestureDetector gesture={composedGesture}>
@@ -403,7 +397,7 @@ export default function CalendarPage() {
             </View>
           </PagerView>
         </GestureDetector>
-      </Animated.View>
+      </View>
 
       {viewType === 'list' && (
         <FlatList

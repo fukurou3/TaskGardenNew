@@ -1,23 +1,14 @@
 // app/features/tasks/components/TaskItem.tsx
-import React, { useContext, useMemo, memo, useState, useEffect, useRef } from 'react';
+import React, { useContext, useMemo, memo, useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, TextStyle, Vibration } from 'react-native';
+import { Gesture, GestureDetector, PanGesture } from 'react-native-gesture-handler';
+import Animated, { runOnJS, useAnimatedStyle, SharedValue } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
 import timezone from 'dayjs/plugin/timezone';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import { useRouter } from 'expo-router';
-import Animated, { 
-  useSharedValue, 
-  useAnimatedStyle, 
-  useAnimatedGestureHandler, 
-  withSpring, 
-  withTiming,
-  withDelay,
-  runOnJS,
-  interpolate
-} from 'react-native-reanimated';
-import { PanGestureHandler } from 'react-native-gesture-handler';
 
 import { DisplayableTaskItem } from '../types';
 import { createStyles } from '../styles';
@@ -191,18 +182,20 @@ type Props = {
   isInsideFolder?: boolean;
   isLastItem?: boolean;
   isDraggable?: boolean;
-  onDragStart?: (id: string) => void;
-  onDragActive?: (id: string, translationY: number) => void;
-  onDragEnd?: (id: string, newIndex: number) => void;
-  onMoveUp?: (id: string) => void;
-  onMoveDown?: (id: string) => void;
-  canMoveUp?: boolean;
-  canMoveDown?: boolean;
-  currentIndex?: number;
+  onReorder?: (fromIndex: number, toIndex: number) => void;
+  onDragStart?: (index: number) => boolean;
+  onDragUpdate?: (offsetY: number) => void;
+  onDragEnd?: () => void;
+  onDragCancel?: () => void;
+  index?: number;
   totalItems?: number;
-  isDragging?: boolean;
-  shouldMoveUp?: boolean;
-  shouldMoveDown?: boolean;
+  // SharedValue-based animation props
+  draggedItemAnimatedStyle?: any;
+  itemOffsetAnimatedStyle?: any;
+  placeholderAnimatedStyle?: any;
+  isDragging?: SharedValue<boolean>;
+  dragIndex?: SharedValue<number>;
+  placeholderPosition?: 'above' | 'below' | null;
 };
 
 export const TaskItem = memo(({
@@ -215,166 +208,80 @@ export const TaskItem = memo(({
   isInsideFolder,
   isLastItem,
   isDraggable = false,
+  onReorder,
   onDragStart,
-  onDragActive,
+  onDragUpdate,
   onDragEnd,
-  onMoveUp,
-  onMoveDown,
-  canMoveUp = false,
-  canMoveDown = false,
-  currentIndex = 0,
+  onDragCancel,
+  index = 0,
   totalItems = 1,
-  isDragging = false,
-  shouldMoveUp = false,
-  shouldMoveDown = false,
+  draggedItemAnimatedStyle,
+  itemOffsetAnimatedStyle,
+  placeholderAnimatedStyle,
+  isDragging,
+  dragIndex,
+  placeholderPosition = null,
 }: Props) => {
   const { colorScheme, subColor } = useAppTheme();
   const isDark = colorScheme === 'dark';
+  
   const { fontSizeKey } = useContext(FontSizeContext);
   const styles = createStyles(isDark, subColor, fontSizeKey);
   const router = useRouter();
 
-  // シンプルなドラッグアニメーション用の値
-  const translateY = useSharedValue(0);
-  const scale = useSharedValue(1);
-  const opacity = useSharedValue(1);
-  const elevation = useSharedValue(0);
+  // Gesture state management
+  const [isLongPressActive, setIsLongPressActive] = useState(false);
+  const startPositionRef = useRef({ x: 0, y: 0 });
+  const dragStartedRef = useRef(false);
   
-  // 他のタスクの位置調整用の値
-  const offsetY = useSharedValue(0);
-  
-  // 長押し検出用
-  const longPressTimer = useRef<NodeJS.Timeout | null>(null);
-  const isDragEnabled = useSharedValue(false);
-  const gestureStartTime = useSharedValue(0);
-  
-  // ハプティックフィードバック関数
-  const triggerHaptic = () => {
+  // Enhanced haptic feedback
+  const triggerHaptic = useCallback((type: 'light' | 'medium' | 'heavy' = 'light') => {
     try {
-      Vibration.vibrate(30); // 軽い振動（30ms）
+      const intensity = type === 'light' ? 30 : type === 'medium' ? 50 : 100;
+      Vibration.vibrate(intensity);
     } catch (error) {
       console.log('Haptic feedback not available');
     }
-  };
-  
-  // フォルダ内での控えめな移動（枠を拡張させない）
-  useEffect(() => {
-    if (shouldMoveUp) {
-      // Google Todo風の微細な移動
-      offsetY.value = withSpring(-8, { damping: 20, stiffness: 400 });
-    } else if (shouldMoveDown) {
-      // Google Todo風の微細な移動
-      offsetY.value = withSpring(8, { damping: 20, stiffness: 400 });
-    } else {
-      // 元の位置に戻る
-      offsetY.value = withSpring(0, { damping: 20, stiffness: 400 });
+  }, []);
+
+  // Gesture handling replaced with simple TouchableOpacity long press
+  // Complex gesture detection removed due to Reanimated stability issues
+
+  // Determine if this item is being dragged
+  const isBeingDragged = useMemo(() => {
+    return isDragging?.value && dragIndex?.value === index;
+  }, [isDragging, dragIndex, index]);
+
+  // Enhanced animated styles with gesture handling
+  const enhancedGestureAnimatedStyle = useAnimatedStyle(() => {
+    if (!isDragging || !dragIndex) return {};
+    
+    const isCurrentlyDragged = isDragging.value && dragIndex.value === index;
+    const scale = isCurrentlyDragged ? 1.05 : 1;
+    const opacity = isCurrentlyDragged ? 0.9 : 1;
+    
+    return {
+      transform: [{ scale }],
+      opacity,
+    };
+  });
+
+  // Combined animated styles
+  const combinedAnimatedStyle = useMemo(() => {
+    const styles = [enhancedGestureAnimatedStyle];
+    
+    // Add drag-specific styles if being dragged
+    if (isBeingDragged && draggedItemAnimatedStyle) {
+      styles.push(draggedItemAnimatedStyle);
     }
-  }, [shouldMoveUp, shouldMoveDown, offsetY]);
-
-  const gestureHandler = useAnimatedGestureHandler({
-    onStart: (event) => {
-      gestureStartTime.value = Date.now();
-      isDragEnabled.value = false;
-    },
-    onActive: (event) => {
-      const currentTime = Date.now();
-      const timeSinceStart = currentTime - gestureStartTime.value;
-      
-      // 長押し閾値（500ms）を超えた場合のみドラッグを有効化
-      if (timeSinceStart >= 500 && !isDragEnabled.value && isDraggable) {
-        isDragEnabled.value = true;
-        
-        if (onDragStart) {
-          // Google Todo風のドラッグエフェクト
-          scale.value = withSpring(1.02, { damping: 15, stiffness: 300 });
-          elevation.value = withTiming(4, { duration: 150 });
-          opacity.value = withTiming(0.95, { duration: 150 });
-          runOnJS(triggerHaptic)();
-          runOnJS(onDragStart)(task.keyId);
-        }
-      }
-      
-      // ドラッグが有効化されている場合のみ移動を追従
-      if (isDragEnabled.value && isDraggable) {
-        translateY.value = event.translationY;
-        
-        if (onDragActive) {
-          runOnJS(onDragActive)(task.keyId, event.translationY);
-        }
-      }
-    },
-    onEnd: (event) => {
-      if (isDragEnabled.value && isDraggable && onDragEnd) {
-        // 標準的なドラッグ終了計算
-        const itemHeight = 70;
-        const movement = event.translationY;
-        
-        // シンプルなインデックス計算
-        const indexOffset = Math.round(movement / itemHeight);
-        let newIndex = currentIndex + indexOffset;
-        newIndex = Math.max(0, Math.min(totalItems - 1, newIndex));
-        
-        console.log('Drag calculation:', { 
-          movement, 
-          currentIndex, 
-          newIndex, 
-          itemHeight, 
-          totalItems 
-        });
-        
-        // 位置が変更された場合のみハプティックフィードバック
-        if (newIndex !== currentIndex) {
-          runOnJS(triggerHaptic)();
-        }
-        
-        // データ更新を実行
-        runOnJS(onDragEnd)(task.keyId, newIndex);
-      }
-      
-      // 常にアニメーションリセット
-      translateY.value = withSpring(0, { damping: 20, stiffness: 300 });
-      scale.value = withSpring(1, { damping: 15, stiffness: 300 });
-      elevation.value = withTiming(0, { duration: 200 });
-      opacity.value = withTiming(1, { duration: 200 });
-      
-      // フラグをリセット
-      isDragEnabled.value = false;
-      gestureStartTime.value = 0;
-    },
-  });
-
-  const animatedStyle = useAnimatedStyle(() => {
-    'worklet';
-    return {
-      transform: [
-        { translateY: isDragging ? translateY.value : offsetY.value },
-        { scale: scale.value }
-      ] as any,
-      opacity: isDragging ? opacity.value : 1.0,
-      elevation: elevation.value,
-      shadowOpacity: interpolate(elevation.value, [0, 10], [0, 0.4]),
-      shadowRadius: interpolate(elevation.value, [0, 10], [0, 12]),
-      shadowColor: '#000000',
-      shadowOffset: {
-        width: 0,
-        height: interpolate(elevation.value, [0, 10], [0, 6])
-      },
-      zIndex: isDragging ? 1000 : (offsetY.value !== 0 ? 100 : 0),
-    };
-  });
-
-  // Google Todo風のドロップインジケーター
-  const dropZoneStyle = useAnimatedStyle(() => {
-    'worklet';
-    const showDropZone = shouldMoveUp || shouldMoveDown;
-    return {
-      height: showDropZone ? withSpring(2, { damping: 20, stiffness: 400 }) : withSpring(0, { damping: 20, stiffness: 400 }),
-      opacity: showDropZone ? withSpring(0.8, { damping: 20, stiffness: 400 }) : withSpring(0, { damping: 20, stiffness: 400 }),
-      backgroundColor: showDropZone ? '#1A73E8' : 'transparent',
-      marginHorizontal: showDropZone ? 16 : 0,
-      borderRadius: 1,
-    };
-  });
+    
+    // Add offset styles for other items
+    if (!isBeingDragged && itemOffsetAnimatedStyle) {
+      styles.push(itemOffsetAnimatedStyle);
+    }
+    
+    return styles;
+  }, [enhancedGestureAnimatedStyle, isBeingDragged, draggedItemAnimatedStyle, itemOffsetAnimatedStyle]);
 
   const effectiveDueDateUtc = useMemo(() => {
     if (task.isCompletedInstance && task.instanceDate) {
@@ -405,8 +312,38 @@ export const TaskItem = memo(({
 
   const handlePress = () => {
     if (isSelecting) onLongPressSelect(task.keyId);
+    else if (isBeingDragged || isLongPressActive) return; // ドラッグ中は詳細画面に遷移しない
     else if (!task.isCompletedInstance) router.push(`/task-detail/${task.id}`);
   };
+
+  // Enhanced gesture for drag and drop
+  const panGesture = useMemo(() => {
+    if (!isDraggable || isSelecting) return null;
+    
+    return Gesture.Pan()
+      .minDistance(10)
+      .onStart(() => {
+        if (onDragStart) {
+          runOnJS(onDragStart)(index);
+        }
+      })
+      .onUpdate((event) => {
+        if (onDragUpdate) {
+          runOnJS(onDragUpdate)(event.translationY);
+        }
+      })
+      .onEnd(() => {
+        if (onDragEnd) {
+          runOnJS(onDragEnd)();
+        }
+      })
+      .onFinalize(() => {
+        if (onDragCancel) {
+          runOnJS(onDragCancel)();
+        }
+      });
+  }, [isDraggable, isSelecting, onDragStart, onDragUpdate, onDragEnd, onDragCancel, index]);
+
 
   const isSelected = selectedIds.includes(task.keyId);
   const baseStyle = isInsideFolder ? styles.folderTaskItemContainer : styles.taskItemContainer;
@@ -448,53 +385,103 @@ export const TaskItem = memo(({
     </View>
   );
 
-  if (isDraggable) {
+  const handleLongPress = () => {
+    // 選択モードの時のみ長押し処理
+    if (isSelecting) {
+      onLongPressSelect(task.keyId);
+    }
+  };
+
+  // Enhanced drag-and-drop interface with gesture handling
+  if (isDraggable && !isSelecting) {
+    const DraggableItem = () => (
+      <Animated.View
+        style={[
+          itemContainerStyle,
+          combinedAnimatedStyle,
+          isBeingDragged && {
+            backgroundColor: isDark ? 'rgba(28, 28, 30, 0.98)' : 'rgba(255, 255, 255, 0.98)',
+            marginHorizontal: 8,
+            borderRadius: 12,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.3,
+            shadowRadius: 8,
+            elevation: 8,
+          }
+        ]}
+      >
+        <TouchableOpacity
+          onPress={handlePress}
+          style={{ flex: 1 }}
+          disabled={isBeingDragged}
+          activeOpacity={0.7}
+        >
+          {taskContent}
+        </TouchableOpacity>
+      </Animated.View>
+    );
+
     return (
-      <>
-        {/* コンパクトなドロップインジケーター */}
-        <Animated.View 
-          style={[
-            dropZoneStyle,
-            {
-              backgroundColor: isDark ? 'rgba(0, 122, 255, 0.4)' : 'rgba(0, 122, 255, 0.4)',
-              borderRadius: 3,
-              marginHorizontal: 20,
-            }
-          ]} 
-        />
+      <View>
+        {/* Top placeholder */}
+        {placeholderPosition === 'above' && (
+          <Animated.View 
+            style={[
+              {
+                backgroundColor: isDark ? '#007AFF' : '#007AFF',
+                marginHorizontal: 20,
+                borderRadius: 2,
+                marginVertical: 2,
+              },
+              placeholderAnimatedStyle
+            ]}
+          />
+        )}
         
-        <Animated.View style={[animatedStyle]}>
-          <PanGestureHandler 
-            onGestureEvent={gestureHandler}
-            activeOffsetY={[-5, 5]}
-            failOffsetX={[-20, 20]}
-            shouldCancelWhenOutside={false}
-            enableTrackpadTwoFingerGesture={false}
-            minPointers={1}
-            minDist={0}
+        {panGesture ? (
+          <GestureDetector gesture={panGesture}>
+            <DraggableItem />
+          </GestureDetector>
+        ) : (
+          <TouchableOpacity
+            onLongPress={() => {
+              if (onDragStart) {
+                onDragStart(index);
+              }
+            }}
+            delayLongPress={500}
+            style={{ flex: 1 }}
           >
-            <Animated.View>
-              <TouchableOpacity
-                onPress={handlePress}
-                style={itemContainerStyle}
-                disabled={isSelecting ? false : task.isCompletedInstance}
-              >
-                {taskContent}
-              </TouchableOpacity>
-            </Animated.View>
-          </PanGestureHandler>
-        </Animated.View>
-      </>
+            <DraggableItem />
+          </TouchableOpacity>
+        )}
+        
+        {/* Bottom placeholder */}
+        {placeholderPosition === 'below' && (
+          <Animated.View 
+            style={[
+              {
+                backgroundColor: isDark ? '#007AFF' : '#007AFF',
+                marginHorizontal: 20,
+                borderRadius: 2,
+                marginVertical: 2,
+              },
+              placeholderAnimatedStyle
+            ]}
+          />
+        )}
+      </View>
     );
   }
 
   return (
     <TouchableOpacity
       onPress={handlePress}
-      onLongPress={() => onLongPressSelect(task.keyId)}
-      delayLongPress={200}
-      style={itemContainerStyle}
-      disabled={isSelecting ? false : task.isCompletedInstance}
+      onLongPress={isSelecting ? handleLongPress : undefined}
+      delayLongPress={300}
+      style={[itemContainerStyle]}
+      disabled={task.isCompletedInstance && !isSelecting}
     >
       {taskContent}
     </TouchableOpacity>

@@ -33,7 +33,8 @@
       "expo-localization",
       "expo-secure-store",
       "expo-sqlite",
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-router"
     ]
   }
 }

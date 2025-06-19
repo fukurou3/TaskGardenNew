@@ -132,7 +132,7 @@ export default function TasksScreen() {
           memoizedPagesData={memoizedPagesData}
           sortMode={sortMode}
           isTaskReorderMode={isTaskReorderMode}
-          onTaskReorder={logic.handleTaskReorder}
+          onTaskReorder={logic.createTaskReorderHandler}
           onFolderReorder={logic.handleFolderReorder}
         />
       )}

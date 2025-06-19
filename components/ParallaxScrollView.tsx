@@ -1,11 +1,8 @@
 import type { PropsWithChildren, ReactElement } from 'react'
 import { StyleSheet, useWindowDimensions } from 'react-native'
-import Animated, {
-  interpolate,
-  useAnimatedRef,
-  useAnimatedStyle,
-  useScrollViewOffset,
-} from 'react-native-reanimated'
+import { ScrollView, View } from 'react-native';
+// Temporarily disabled reanimated
+// import Animated, { interpolate, useAnimatedRef, useAnimatedStyle, useScrollViewOffset } from 'react-native-reanimated'
 
 import { ThemedView } from '@/components/ThemedView'
 import { useBottomTabOverflow } from '@/components/ui/TabBarBackground'
@@ -24,58 +21,35 @@ export default function ParallaxScrollView({
   headerBackgroundColor,
 }: Props) {
   const colorScheme = useColorScheme() ?? 'light'
-  const scrollRef = useAnimatedRef<Animated.ScrollView>()
-  const scrollOffset = useScrollViewOffset(scrollRef)
   const bottom = useBottomTabOverflow()
   const { width } = useWindowDimensions()
   const isTablet = width >= 768
 
-  const headerAnimatedStyle = useAnimatedStyle(() => {
-    const transform = [
-      {
-        translateY: interpolate(
-          scrollOffset.value,
-          [-HEADER_HEIGHT, 0, HEADER_HEIGHT],
-          [-HEADER_HEIGHT / 2, 0, HEADER_HEIGHT * 0.75]
-        ),
-      },
-      {
-        scale: interpolate(scrollOffset.value, [-HEADER_HEIGHT, 0, HEADER_HEIGHT], [2, 1, 1]),
-      },
-    ] as const
-
-    return {
-      transform,
-    }
-  })
-
   return (
     <ThemedView style={styles.container}>
-      <Animated.ScrollView
-        ref={scrollRef}
+      <ScrollView
         scrollEventThrottle={16}
         scrollIndicatorInsets={{ bottom }}
         contentContainerStyle={{ paddingBottom: bottom }}
       >
-        <Animated.View
+        <View
           style={[
             styles.header,
             { backgroundColor: headerBackgroundColor[colorScheme] },
-            headerAnimatedStyle,
           ]}
         >
           {headerImage}
-        </Animated.View>
+        </View>
 
         <ThemedView
           style={[
             styles.content,
-            { paddingHorizontal: isTablet ? 0 : 32 }, // ✅ タブレット時は左右余白なし
+            { paddingHorizontal: isTablet ? 0 : 32 },
           ]}
         >
           {children}
         </ThemedView>
-      </Animated.ScrollView>
+      </ScrollView>
     </ThemedView>
   )
 }

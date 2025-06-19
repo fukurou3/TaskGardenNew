@@ -6,7 +6,7 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useState } from 'react';
-import 'react-native-reanimated';
+// React Native Reanimated disabled due to technical constraints
 import i18n, { initI18n } from '@/lib/i18n';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import TasksDatabase from '@/lib/TaskDatabase';

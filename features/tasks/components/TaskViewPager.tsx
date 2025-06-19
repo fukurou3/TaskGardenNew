@@ -1,6 +1,6 @@
 // app/features/tasks/components/TaskViewPager.tsx
-import React from 'react';
-import { View, Text, Dimensions } from 'react-native';
+import React, { useMemo } from 'react';
+import { View, Text, Dimensions, FlatList, ScrollView } from 'react-native';
 import PagerView, { type PagerViewOnPageSelectedEvent, type PagerViewOnPageScrollEvent } from 'react-native-pager-view';
 import type { TaskScreenStyles } from '@/features/tasks/styles';
 import type { DisplayableTaskItem, SelectableItem } from '@/features/tasks/types';
@@ -30,7 +30,7 @@ type TaskViewPagerProps = {
   memoizedPagesData: Map<string, MemoizedPageData>;
   sortMode?: 'deadline' | 'custom';
   isTaskReorderMode?: boolean;
-  onTaskReorder?: (folderName: string, fromIndex: number, toIndex: number) => void;
+  onTaskReorder?: (folderName: string) => (fromIndex: number, toIndex: number) => Promise<void>;
   onFolderReorder?: (folderName: string, fromIndex: number, toIndex: number) => void;
 };
 
@@ -61,7 +61,8 @@ export const TaskViewPager: React.FC<TaskViewPagerProps> = ({
   onTaskReorder,
   onFolderReorder,
 }) => {
-  const renderPageContent = (pageFolderName: string, pageIndex: number) => {
+  // Simplified page rendering
+  const renderPageContent = useMemo(() => (pageFolderName: string, pageIndex: number) => {
     const pageData = memoizedPagesData.get(pageFolderName);
     if (!pageData) {
         return <View key={`page-${pageFolderName}-${pageIndex}`} style={{ width: windowWidth, flex: 1 }} />;
@@ -69,7 +70,20 @@ export const TaskViewPager: React.FC<TaskViewPagerProps> = ({
     const { foldersToRender, tasksByFolder, allTasksForPage } = pageData;
 
     return (
-      <View key={`page-${pageFolderName}-${pageIndex}`} style={{ width: windowWidth, flex: 1, paddingTop: 8, paddingBottom: isSelecting ? SELECTION_BAR_HEIGHT + 20 : 100 }}>
+      <ScrollView 
+        key={`page-${pageFolderName}-${pageIndex}`} 
+        style={{ width: windowWidth, flex: 1 }}
+        contentContainerStyle={{ paddingTop: 8, paddingBottom: isSelecting ? SELECTION_BAR_HEIGHT + 20 : 100 }}
+        showsVerticalScrollIndicator={true}
+        scrollEventThrottle={8}
+        removeClippedSubviews={true}
+        nestedScrollEnabled={true}
+        overScrollMode="never"
+        bounces={true}
+        bouncesZoom={false}
+        decelerationRate={0.998}
+        snapToAlignment="start"
+      >
           {foldersToRender.map((folderName, folderIndex) => {
             const sortedFolderTasks = tasksByFolder.get(folderName) || [];
             if (activeTab === 'completed' && sortedFolderTasks.length === 0) {
@@ -90,7 +104,7 @@ export const TaskViewPager: React.FC<TaskViewPagerProps> = ({
               currentTab: activeTab,
               sortMode,
               isTaskReorderMode,
-              onTaskReorder,
+              onTaskReorder: onTaskReorder ? onTaskReorder(folderName) : undefined,
               onFolderReorder,
               folderIndex,
               totalFolders: foldersToRender.length,
@@ -104,15 +118,15 @@ export const TaskViewPager: React.FC<TaskViewPagerProps> = ({
                </Text>
              </View>
            )}
-      </View>
+      </ScrollView>
     );
-  };
+  }, [memoizedPagesData, windowWidth, isSelecting, SELECTION_BAR_HEIGHT, activeTab, toggleTaskDone, isReordering, draggingFolder, noFolderName, moveFolderOrder, stopReordering, selectedItems, onLongPressSelectItem, sortMode, isTaskReorderMode, onTaskReorder, onFolderReorder, styles.emptyContainer, styles.emptyText, t]);
 
   return (
     <PagerView
       ref={pagerRef}
       style={{ flex: 1 }}
-      initialPage={selectedTabIndex} // ★ プロパティ名を変更
+      initialPage={selectedTabIndex}
       onPageSelected={handlePageSelected}
       onPageScroll={handlePageScroll}
       key={folderTabs.map(f => f.name).join('-')}

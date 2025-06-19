@@ -58,6 +58,9 @@ export type TaskScreenStyles = {
  reorderButtonsContainer: ViewStyle;
  reorderButtonDisabled: ViewStyle;
  menuButton: ViewStyle;
+ reorderModeOverlay: ViewStyle;
+ exitReorderButton: ViewStyle;
+ exitReorderButtonText: TextStyle;
 };
 
 export const createStyles = (isDark: boolean, subColor: string, fontSizeKey: FontSizeKey): TaskScreenStyles => {
@@ -74,6 +77,12 @@ export const createStyles = (isDark: boolean, subColor: string, fontSizeKey: Fon
     shadowOpacity: isDark ? 0.25 : 0.1,
     shadowRadius: 3.84,
     elevation: 3,
+ };
+ 
+ // GPU optimization base for smooth animations
+ const gpuOptimizations = {
+    overflow: 'hidden' as 'hidden',
+    backfaceVisibility: 'hidden' as 'hidden',
  };
 
  const cardBackground = isDark ? '#1f1f21' : '#FFFFFF';
@@ -259,6 +268,8 @@ export const createStyles = (isDark: boolean, subColor: string, fontSizeKey: Fon
     taskItem: {
         flexDirection: 'row',
         alignItems: 'center',
+        position: 'relative' as 'relative',
+        minHeight: 70,
     },
     checkboxContainer: {
         paddingRight: 14,
@@ -392,6 +403,38 @@ export const createStyles = (isDark: boolean, subColor: string, fontSizeKey: Fon
         justifyContent: 'center',
         alignItems: 'center',
         marginLeft: 4,
+    },
+    reorderModeOverlay: {
+        position: 'absolute',
+        top: 0,
+        right: 0,
+        left: 0,
+        bottom: 0,
+        backgroundColor: 'transparent',
+        justifyContent: 'flex-end',
+        alignItems: 'center',
+        paddingBottom: 20,
+        pointerEvents: 'box-none',
+    },
+    exitReorderButton: {
+        backgroundColor: dynamicSubColor,
+        paddingHorizontal: 20,
+        paddingVertical: 10,
+        borderRadius: BORDER_RADIUS_SM,
+        shadowColor: '#000',
+        shadowOffset: {
+            width: 0,
+            height: 2,
+        },
+        shadowOpacity: 0.25,
+        shadowRadius: 3.84,
+        elevation: 5,
+    },
+    exitReorderButtonText: {
+        color: '#FFFFFF',
+        fontSize: baseFontSize,
+        fontWeight: '600',
+        textAlign: 'center',
     },
  });
 };

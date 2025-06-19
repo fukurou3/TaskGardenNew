@@ -7,7 +7,7 @@ import dayjs from 'dayjs';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import PagerView, { type PagerViewOnPageSelectedEvent, type PagerViewOnPageScrollEvent } from 'react-native-pager-view';
-import { useSharedValue, withTiming } from 'react-native-reanimated';
+import { Animated } from 'react-native';
 
 import type { Task, FolderOrder, SelectableItem, DisplayTaskOriginal, DisplayableTaskItem } from '@/features/tasks/types';
 import { calculateNextDisplayInstanceDate, calculateActualDueDate } from '@/features/tasks/utils';
@@ -48,7 +48,7 @@ export const useTasksScreenLogic = () => {
   const [renameModalVisible, setRenameModalVisible] = useState(false);
   const [renameTarget, setRenameTarget] = useState<string | null>(null);
 
-  const selectionAnim = useSharedValue(SELECTION_BAR_HEIGHT);
+  const selectionAnim = useRef(new Animated.Value(SELECTION_BAR_HEIGHT)).current;
   const pagerRef = useRef<PagerView>(null);
   const folderTabsScrollViewRef = useRef<ScrollView>(null);
   const [folderTabLayouts, setFolderTabLayouts] = useState<Record<number, FolderTabLayout>>({});
@@ -56,7 +56,7 @@ export const useTasksScreenLogic = () => {
   // ★ ちらつきの原因となっていた currentContentPage を廃止し、新しい確定状態を導入
   const [selectedTabIndex, setSelectedTabIndex] = useState(0);
 
-  const pageScrollPosition = useSharedValue(0);
+  const [pageScrollPosition, setPageScrollPosition] = useState(0);
 
   const noFolderName = useMemo(() => t('common.no_folder_name', 'フォルダなし'), [t]);
 
@@ -147,7 +147,7 @@ export const useTasksScreenLogic = () => {
       setSelectedTabIndex(newIndex);
       // フォルダタブリストが変化したときのみページャーを同期させる
       pagerRef.current?.setPageWithoutAnimation(newIndex);
-      pageScrollPosition.value = newIndex;
+      setPageScrollPosition(newIndex);
     }
   }, [folderTabs, selectedFolderTabName]);
 
@@ -178,7 +178,11 @@ export const useTasksScreenLogic = () => {
   }, [folderTabLayouts, folderTabs]);
 
   useEffect(() => {
-    selectionAnim.value = withTiming(selectionHook.isSelecting ? 0 : SELECTION_BAR_HEIGHT, { duration: 250 });
+    Animated.timing(selectionAnim, {
+      toValue: selectionHook.isSelecting ? 0 : SELECTION_BAR_HEIGHT,
+      duration: 250,
+      useNativeDriver: true,
+    }).start();
   }, [selectionHook.isSelecting, selectionAnim]);
 
   // Auto-exit task reorder mode when switching tabs or changing from custom sort
@@ -498,13 +502,13 @@ export const useTasksScreenLogic = () => {
       // PagerView をプログラムで操作
       pagerRef.current?.setPage(index);
       // アニメーション値を更新して、UIの追従を即座に開始させる（ちらつき防止）
-      pageScrollPosition.value = withTiming(index, { duration: 250 });
+      setPageScrollPosition(index); // Simplified without animation
     }
   }, [selectedTabIndex, pageScrollPosition]);
 
   const handlePageScroll = useCallback((event: PagerViewOnPageScrollEvent) => {
     // PagerViewのスクロールに追従してアニメーション値を更新
-    pageScrollPosition.value = event.nativeEvent.position + event.nativeEvent.offset;
+    setPageScrollPosition(event.nativeEvent.position + event.nativeEvent.offset);
   }, [pageScrollPosition]);
 
   // ★ ページ切り替え完了時の処理を修正
@@ -767,7 +771,7 @@ export const useTasksScreenLogic = () => {
   // CustomOrderのクリーンアップと正規化（tasksを依存から除外してループを防ぐ）
   const normalizeCustomOrdersRef = useRef<(currentTasks: Task[]) => Promise<void>>();
   
-  normalizeCustomOrdersRef.current = useCallback(async (currentTasks: Task[]) => {
+  const normalizeCustomOrders = useCallback(async (currentTasks: Task[]) => {
     const updatedTasks = [...currentTasks];
     let hasChanges = false;
 
@@ -812,6 +816,9 @@ export const useTasksScreenLogic = () => {
       console.log('CustomOrders normalized');
     }
   }, [folderOrder, noFolderName, getBaseOrderForFolder]);
+
+  // Assign to ref for use in useEffect
+  normalizeCustomOrdersRef.current = normalizeCustomOrders;
 
   // sortMode変更時とアプリ起動時にcustomOrderを正規化（1回のみ実行）
   const normalizeTriggeredRef = useRef(false);
@@ -918,6 +925,13 @@ export const useTasksScreenLogic = () => {
     }
   }, [tasks, noFolderName, sortMode, getBaseOrderForFolder]);
 
+  // Wrapper for the new drag and drop system
+  const createTaskReorderHandler = useCallback((folderName: string) => {
+    return async (fromIndex: number, toIndex: number) => {
+      await handleTaskReorder(folderName, fromIndex, toIndex);
+    };
+  }, [handleTaskReorder]);
+
   const handleFolderReorder = useCallback(async (folderName: string, fromIndex: number, toIndex: number) => {
     if (fromIndex === toIndex) return;
 
@@ -974,6 +988,7 @@ export const useTasksScreenLogic = () => {
 
     handleRenameFolderSubmit, handleReorderSelectedFolder, openRenameModalForSelectedFolder,
     handleTaskReorder,
+    createTaskReorderHandler,
     handleFolderReorder,
     handleRefresh,
     // フォルダ操作用のクリーンアップ関数を公開

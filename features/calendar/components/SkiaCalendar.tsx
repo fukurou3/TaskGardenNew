@@ -7,7 +7,7 @@ import { isHoliday } from '@holiday-jp/holiday_jp';
 import dayjs from 'dayjs';
 import type { SharedValue } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { runOnJS } from 'react-native-reanimated';
+// Reanimated disabled
 import type { Task } from '@/features/tasks/types';
 import type { EventLayout } from '../utils';
 import { FontSizeContext, type FontSizeKey } from '@/context/FontSizeContext';
@@ -41,7 +41,7 @@ const EVENT_FONT_SIZES: Record<FontSizeKey, number> = {
 
 interface SkiaCalendarProps {
   date: dayjs.Dayjs;
-  opacity: SharedValue<number>;
+  opacity: any; // Mock type since Reanimated is disabled
   backgroundImage?: number | null;
   selectedDate: string;
   onDayPress: (date: string) => void;
@@ -120,8 +120,7 @@ export default function SkiaCalendar({
   };
 
   const handleTap = Gesture.Tap().onEnd((e) => {
-    'worklet';
-    runOnJS(processTap)(e.x, e.y);
+    processTap(e.x, e.y);
   });
 
   if (!font || !eventFont) {

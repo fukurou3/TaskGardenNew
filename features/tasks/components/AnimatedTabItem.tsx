@@ -1,7 +1,8 @@
 // app/features/tasks/components/AnimatedTabItem.tsx
 import React from 'react';
 import { TouchableOpacity, type LayoutChangeEvent } from 'react-native';
-import Reanimated, { useAnimatedStyle, useDerivedValue, withTiming, interpolateColor } from 'react-native-reanimated';
+import { View, Text } from 'react-native';
+// Reanimated disabled - using standard components
 import { TAB_MARGIN_RIGHT } from '../constants';
 
 type AnimatedTabItemProps = {
@@ -9,7 +10,7 @@ type AnimatedTabItemProps = {
   index: number;
   onPress: (index: number, label: string) => void;
   onTabLayout: (index: number, event: LayoutChangeEvent) => void;
-  pageScrollPosition: Reanimated.SharedValue<number>;
+  pageScrollPosition: any;
   selectedTextColor: string;
   unselectedTextColor: string;
   selectedFontWeight: 'normal' | 'bold' | '100' | '200' | '300' | '400' | '500' | '600' | '700' | '800' | '900' | undefined;
@@ -40,32 +41,14 @@ export const AnimatedTabItem: React.FC<AnimatedTabItemProps> = React.memo(({
     onTabLayout(index, event);
   };
 
-  const activeIndex = useDerivedValue(() => {
-    'worklet';
-    // Avoid flickering by simply rounding the pager position
-    return Math.round(pageScrollPosition.value);
-  });
-
-  const progress = useDerivedValue(() => {
-    'worklet';
-    return withTiming(activeIndex.value === index ? 1 : 0, { duration: 200 });
-  });
-
-  const animatedTextStyle = useAnimatedStyle(() => {
-    'worklet';
-    const color = interpolateColor(
-      progress.value,
-      [0, 1],
-      [unselectedTextColor, selectedTextColor]
-    );
-
-    const fontWeight = progress.value > 0.5 ? selectedFontWeight : unselectedFontWeight;
-
-    return {
-      color: color as string,
-      fontWeight: fontWeight,
-    };
-  });
+  // Simplified without animation
+  const activeIndex = Math.round(pageScrollPosition?.value || 0);
+  const isActive = activeIndex === index;
+  
+  const textStyle = {
+    color: isActive ? selectedTextColor : unselectedTextColor,
+    fontWeight: isActive ? selectedFontWeight : unselectedFontWeight,
+  };
 
   return (
     <TouchableOpacity
@@ -74,9 +57,9 @@ export const AnimatedTabItem: React.FC<AnimatedTabItemProps> = React.memo(({
       onLayout={handleLayout}
       activeOpacity={0.7}
     >
-      <Reanimated.Text style={[baseTabTextStyle, animatedTextStyle]}>
+      <Text style={[baseTabTextStyle, textStyle]}>
         {label}
-      </Reanimated.Text>
+      </Text>
     </TouchableOpacity>
   );
 });

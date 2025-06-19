@@ -1,9 +1,8 @@
 // app/features/tasks/components/FolderTabsBar.tsx
 import React, { useCallback, useEffect } from 'react';
 import { ScrollView, View, type LayoutChangeEvent } from 'react-native';
-import type { SharedValue } from 'react-native-reanimated';
-import { useSharedValue, useDerivedValue, runOnJS } from 'react-native-reanimated';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+// Reanimated disabled - using standard components
+// import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { Canvas, RoundedRect } from '@shopify/react-native-skia';
 import type { TaskScreenStyles } from '@/features/tasks/styles';
 import type { FolderTab, FolderTabLayout } from '@/features/tasks/hooks/useTasksScreenLogic';
@@ -17,7 +16,7 @@ type FolderTabsBarProps = {
   folderTabLayouts: Record<number, FolderTabLayout>;
   setFolderTabLayouts: (updater: (prev: Record<number, FolderTabLayout>) => Record<number, FolderTabLayout>) => void;
   handleFolderTabPress: (folderName: string, index: number) => void;
-  pageScrollPosition: SharedValue<number>;
+  pageScrollPosition: any; // Standard Animated.Value
   folderTabsScrollViewRef: React.RefObject<ScrollView>;
 };
 
@@ -28,7 +27,7 @@ export const FolderTabsBar: React.FC<FolderTabsBarProps> = React.memo(({
   folderTabLayouts,
   setFolderTabLayouts,
   handleFolderTabPress,
-  pageScrollPosition,
+  pageScrollPosition, // Re-enabled for mock object
   folderTabsScrollViewRef,
 }) => {
   const selectedTextColor = styles.folderTabSelectedText.color as string;
@@ -38,8 +37,9 @@ export const FolderTabsBar: React.FC<FolderTabsBarProps> = React.memo(({
   const baseTabTextStyle = styles.folderTabText;
   const baseTabButtonStyle = styles.folderTabButton;
 
-  const outputX = useSharedValue<number[]>([]);
-  const outputWidth = useSharedValue<number[]>([]);
+  // Simplified without Reanimated SharedValues
+  const outputX = { value: [] as number[] };
+  const outputWidth = { value: [] as number[] };
 
   useEffect(() => {
     const layoutsReady = folderTabs.length > 0 && Object.keys(folderTabLayouts).length >= folderTabs.length;
@@ -77,71 +77,12 @@ export const FolderTabsBar: React.FC<FolderTabsBarProps> = React.memo(({
     });
   }, [setFolderTabLayouts]);
 
-  const indicatorX = useDerivedValue(() => {
-    'worklet';
-    if (outputX.value.length === 0 || outputWidth.value.length === 0) return 0;
+  // Simplified static indicator (no animation)
+  const indicatorX = { value: 0 };
+  const indicatorWidth = { value: 0 };
 
-    const position = pageScrollPosition.value;
-    const index = Math.floor(position);
-    const progress = position - index;
-    const nextIndex = Math.min(outputX.value.length - 1, index + 1);
-
-    const startX = outputX.value[index] ?? 0;
-    const endX = outputX.value[nextIndex] ?? startX;
-
-    return startX + (endX - startX) * progress;
-  });
-
-  const indicatorWidth = useDerivedValue(() => {
-    'worklet';
-    if (outputX.value.length === 0 || outputWidth.value.length === 0) return 0;
-
-    const position = pageScrollPosition.value;
-    const index = Math.floor(position);
-    const progress = position - index;
-    const nextIndex = Math.min(outputWidth.value.length - 1, index + 1);
-
-    const startW = outputWidth.value[index] ?? 0;
-    const endW = outputWidth.value[nextIndex] ?? startW;
-
-    return startW + (endW - startW) * progress;
-  });
-
-  const computePosition = (x: number) => {
-    'worklet';
-    const xs = outputX.value;
-    const ws = outputWidth.value;
-    if (xs.length === 0) return 0;
-
-    const minX = xs[0];
-    const lastX = xs[xs.length - 1] + ws[ws.length - 1];
-    const clampedX = Math.max(minX, Math.min(x, lastX));
-
-    for (let i = 0; i < xs.length - 1; i++) {
-      const start = xs[i];
-      const end = xs[i + 1];
-      if (clampedX >= start && clampedX <= end) {
-        const ratio = (clampedX - start) / (end - start);
-        return i + ratio;
-      }
-    }
-    return xs.length - 1;
-  };
-
-  const panGesture = Gesture.Pan()
-    .onBegin(() => {
-      'worklet';
-    })
-    .onUpdate((e) => {
-      'worklet';
-      const pos = computePosition(e.x - FOLDER_TABS_CONTAINER_PADDING_HORIZONTAL);
-      pageScrollPosition.value = pos;
-    })
-    .onEnd(() => {
-      'worklet';
-      const idx = Math.round(pageScrollPosition.value);
-      runOnJS(memoizedOnItemPress)(idx, folderTabs[idx]?.label || '');
-    });
+  // Mock gesture since Reanimated is disabled
+  const panGesture = null;
 
   return (
     <View style={[styles.folderTabsContainer]}>
@@ -153,7 +94,6 @@ export const FolderTabsBar: React.FC<FolderTabsBarProps> = React.memo(({
           paddingHorizontal: FOLDER_TABS_CONTAINER_PADDING_HORIZONTAL,
         }}
       >
-        <GestureDetector gesture={panGesture}>
           <View style={{ flexDirection: 'row', position: 'relative' }}>
           {folderTabs.map((folder, index) => (
             <AnimatedTabItem
@@ -175,9 +115,9 @@ export const FolderTabsBar: React.FC<FolderTabsBarProps> = React.memo(({
           {folderTabs.length > 0 && (
             <Canvas style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: ACCENT_LINE_HEIGHT }}>
               <RoundedRect
-                x={indicatorX}
+                x={indicatorX.value}
                 y={0}
-                width={indicatorWidth}
+                width={indicatorWidth.value}
                 height={ACCENT_LINE_HEIGHT}
                 r={ACCENT_LINE_HEIGHT / 2}
                 color={subColor}
@@ -185,7 +125,6 @@ export const FolderTabsBar: React.FC<FolderTabsBarProps> = React.memo(({
             </Canvas>
           )}
           </View>
-        </GestureDetector>
       </ScrollView>
     </View>
   );
