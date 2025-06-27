@@ -243,6 +243,14 @@ export const TaskFolder: React.FC<Props> = ({
                 onTaskReorder?.(from, to);
               }}
               onToggleTaskDone={onToggleTaskDone}
+              onTaskPress={(taskId) => {
+                // Safe navigation to task detail
+                try {
+                  require('expo-router').router.push(`/task-detail/${taskId}`);
+                } catch (error) {
+                  console.error('Navigation error:', error);
+                }
+              }}
               selectedIds={selectedIds}
               isSelecting={isSelecting}
               onLongPressSelect={onLongPressSelect}

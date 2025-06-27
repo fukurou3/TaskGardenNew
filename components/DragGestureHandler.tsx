@@ -14,6 +14,7 @@ export const useDragGestureHandler = (config: DragGestureConfig) => {
     onTaskReorder,
     onToggleTaskDone,
     onLongPressSelect,
+    onTaskPress,
     isSelecting,
     canvasHeight,
     onDragStateChange,
@@ -197,7 +198,19 @@ export const useDragGestureHandler = (config: DragGestureConfig) => {
           if (event.x <= 60 && onToggleTaskDone) {
             // Handle checkbox tap - toggle task completion
             runOnJS(onToggleTaskDone)(task.keyId, task.instanceDate);
+          } else if (onTaskPress) {
+            // Handle task detail navigation (tap on main area)
+            if (!task.isCompletedInstance) {
+              runOnJS(onTaskPress)(task.id);
+            }
           }
+        }
+      } else if (isSelecting) {
+        // Handle task selection in selection mode
+        const taskIndex = getTaskIndexFromY(event.y);
+        if (taskIndex >= 0 && taskIndex < tasks.length && onLongPressSelect) {
+          const task = tasks[taskIndex];
+          runOnJS(onLongPressSelect)('task', task.keyId);
         }
       }
     });

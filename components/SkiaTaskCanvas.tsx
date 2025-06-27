@@ -80,12 +80,47 @@ const SkiaTask = memo<SkiaTaskProps>(({
   const titleX = DRAG_CONFIG.TASK_PADDING + DRAG_CONFIG.CHECKBOX_SIZE + 12 + offsetX;
   const titleY = y + 25; // Adjusted for better text positioning
   
-  // Deadline text (memoized for performance)
+  // Detailed deadline text (same logic as TaskItem)
   const deadlineText = useMemo(() => {
-    return task.deadline ? 
-      new Date(task.deadline).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' }) : 
-      '';
+    if (!task.deadline) return '';
+    
+    const now = new Date();
+    const deadline = new Date(task.deadline);
+    const diffTime = deadline.getTime() - now.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays < 0) {
+      return '期限切れ'; // Overdue
+    } else if (diffDays === 0) {
+      return '今日'; // Today
+    } else if (diffDays === 1) {
+      return '明日'; // Tomorrow
+    } else if (diffDays <= 7) {
+      return `${diffDays}日後`; // X days later
+    } else {
+      return deadline.toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' });
+    }
   }, [task.deadline]);
+  
+  // Deadline color based on urgency (same logic as TaskItem)
+  const deadlineColor = useMemo(() => {
+    if (!task.deadline) return colors.textSecondary;
+    
+    const now = new Date();
+    const deadline = new Date(task.deadline);
+    const diffTime = deadline.getTime() - now.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays < 0) {
+      return '#FF6B6B'; // Red for overdue
+    } else if (diffDays === 0) {
+      return '#FF9500'; // Orange for today
+    } else if (diffDays === 1) {
+      return '#FFCC00'; // Yellow for tomorrow
+    } else {
+      return colors.textSecondary; // Default color
+    }
+  }, [task.deadline, colors.textSecondary]);
   
   const deadlineX = canvasWidth - DRAG_CONFIG.TASK_PADDING - 50 + offsetX;
   const deadlineY = y + 40;
@@ -227,24 +262,24 @@ const SkiaTask = memo<SkiaTaskProps>(({
         </>
       )}
       
-      {/* Deadline text */}
+      {/* Deadline text with urgency-based color */}
       {deadlineText && font && (
         <SkiaText
           x={deadlineX}
           y={deadlineY}
           text={deadlineText}
           font={font}
-          color={colors.textSecondary}
+          color={deadlineColor}
           opacity={opacity}
         />
       )}
       
-      {/* Deadline fallback (if no font) - improved */}
+      {/* Deadline fallback (if no font) - improved with urgency color */}
       {deadlineText && !font && (
         <>
           <Rect 
             rect={rect(deadlineX, deadlineY - 8, 35, 3)} 
-            color={colors.textSecondary}
+            color={deadlineColor}
             opacity={opacity * 0.8} 
           />
           <Rect 
@@ -291,6 +326,7 @@ export const SkiaTaskCanvas = memo<SkiaTaskCanvasProps>(({
   tasks,
   onTaskReorder,
   onToggleTaskDone,
+  onTaskPress,
   selectedIds = [],
   isSelecting = false,
   onLongPressSelect,
@@ -432,6 +468,7 @@ export const SkiaTaskCanvas = memo<SkiaTaskCanvasProps>(({
     tasks: safeTasks,
     onTaskReorder,
     onToggleTaskDone,
+    onTaskPress,
     onLongPressSelect,
     isSelecting,
     canvasHeight,

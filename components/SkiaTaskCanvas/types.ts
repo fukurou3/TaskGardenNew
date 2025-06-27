@@ -45,6 +45,7 @@ export interface DragGestureConfig {
   readonly onTaskReorder: (fromIndex: number, toIndex: number) => void;
   readonly onToggleTaskDone?: (id: string, instanceDate?: string) => void;
   readonly onLongPressSelect?: (type: 'task', id: string) => void;
+  readonly onTaskPress?: (taskId: string) => void;
   readonly isSelecting: boolean;
   readonly canvasHeight: number;
   readonly onDragStateChange?: (isDragging: boolean, dragIndex: number, isLongPressed?: boolean) => void;
@@ -55,6 +56,7 @@ export interface SkiaTaskCanvasProps {
   readonly tasks: ReadonlyArray<DisplayableTaskItem>;
   readonly onTaskReorder: (fromIndex: number, toIndex: number) => void;
   readonly onToggleTaskDone: (id: string, instanceDate?: string) => void;
+  readonly onTaskPress?: (taskId: string) => void;
   readonly selectedIds?: ReadonlyArray<string>;
   readonly isSelecting?: boolean;
   readonly onLongPressSelect?: (type: 'task', id: string) => void;
