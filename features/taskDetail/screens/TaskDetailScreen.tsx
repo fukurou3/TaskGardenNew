@@ -1,0 +1,243 @@
+// features/taskDetail/screens/TaskDetailScreen.tsx
+import React, { useEffect, useState, useContext } from 'react';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  ScrollView,
+  Image,
+  Share,
+  Modal,
+  BackHandler,
+  useWindowDimensions,
+  Platform,
+  Alert,
+} from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import TasksDatabase from '@/lib/TaskDatabase';
+import { useAppTheme } from '@/hooks/ThemeContext';
+import { useTranslation } from 'react-i18next';
+import { FontSizeContext } from '@/context/FontSizeContext';
+import dayjs from 'dayjs';
+import type { Task } from '@/features/add/types';
+import { getTimeText } from '@/features/tasks/utils';
+import { ConfirmModal } from '@/components/ConfirmModal';
+import { createTaskDetailStyles } from '../styles';
+import { TaskActionSheet } from '../components/TaskActionSheet';
+
+const STORAGE_KEY = 'TASKS';
+
+export default function TaskDetailScreen() {
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const router = useRouter();
+  const { colorScheme, subColor } = useAppTheme();
+  const isDark = colorScheme === 'dark';
+  const { fontSizeKey } = useContext(FontSizeContext);
+  const styles = createTaskDetailStyles(isDark, subColor, fontSizeKey);
+  const { width: screenWidth } = useWindowDimensions();
+  const imageMargin = 8;
+  const imageSize = (screenWidth - 40 - imageMargin * 2) / 3;
+  const { t, i18n } = useTranslation();
+
+  const [task, setTask] = useState<Task | null>(null);
+  const [tick, setTick] = useState(0);
+  const [previewUri, setPreviewUri] = useState<string | null>(null);
+  const [isDeleteConfirmVisible, setIsDeleteConfirmVisible] = useState(false);
+  const [isActionModalVisible, setIsActionModalVisible] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      await TasksDatabase.initialize();
+      const rows = await TasksDatabase.getAllTasks();
+      const list = rows.map(r => JSON.parse(r) as Task);
+      const found = list.find(t => t.id === id);
+      if (found) setTask(found);
+    })();
+  }, [id]);
+
+  useEffect(() => {
+    const backAction = () => {
+      router.back();
+      return true;
+    };
+    const sub = BackHandler.addEventListener('hardwareBackPress', backAction);
+    return () => sub.remove();
+  }, [router]);
+
+  useEffect(() => {
+    const interval = setInterval(() => setTick((v) => v + 1), 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleDelete = () => {
+    setIsActionModalVisible(false);
+    setTimeout(() => {
+      setIsDeleteConfirmVisible(true);
+    }, 100);
+  };
+
+  const confirmDelete = async () => {
+    try {
+      await TasksDatabase.deleteTask(id as string);
+      router.replace('/(tabs)/tasks');
+    } catch (error) {
+      console.error('Failed to delete task', error);
+      Alert.alert(
+        t('common.error'),
+        t('task_detail.delete_error_message'),
+        [{ text: t('common.ok') }]
+      );
+    } finally {
+      setIsDeleteConfirmVisible(false);
+    }
+  };
+
+  const cancelDelete = () => {
+    setIsDeleteConfirmVisible(false);
+  };
+
+  const handleToggleDone = async () => {
+    if (!task) return;
+    try {
+      const dueDateUtc = task.deadline ? dayjs.utc(task.deadline) : null;
+      let updated: Task;
+      if (task.deadlineDetails?.repeatFrequency && dueDateUtc) {
+        const instanceDateStr = dueDateUtc.format('YYYY-MM-DD');
+        let dates = task.completedInstanceDates ? [...task.completedInstanceDates] : [];
+        if (dates.includes(instanceDateStr)) {
+          dates = dates.filter(d => d !== instanceDateStr);
+        } else {
+          dates.push(instanceDateStr);
+        }
+        updated = { ...task, completedInstanceDates: dates } as Task;
+      } else {
+        updated = { ...task, completedAt: task.completedAt ? undefined : dayjs.utc().toISOString() } as Task;
+      }
+      await TasksDatabase.saveTask(updated as any);
+      setTask(updated);
+    } catch (e) {
+      console.error('toggle done error', e);
+      Alert.alert(
+        t('common.error'),
+        t('task_detail.toggle_error_message'),
+        [{ text: t('common.ok') }]
+      );
+    }
+  };
+
+  const handleEdit = () => {
+    setIsActionModalVisible(false);
+    router.push({ pathname: '/add_edit', params: { id } });
+  };
+
+  const handleShare = async () => {
+    setIsActionModalVisible(false);
+    if (!task) return;
+    try {
+      await Share.share({ message: `${task.title}\n${task.memo}` });
+    } catch (e) {
+      console.error('share error', e);
+    }
+  };
+
+  if (!task) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.appBar}>
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+            <Ionicons name="chevron-back" size={26} color={subColor} />
+            <Text style={styles.backButtonText}>{t('common.detail')}</Text>
+          </TouchableOpacity>
+        </View>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <Text style={styles.memo}>{t('common.loading')}</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  const deadlineText = task.deadline
+    ? dayjs(task.deadline).format(i18n.language.startsWith('ja') ? 'YYYY/MM/DD' : 'L') +
+      (task.deadlineDetails?.isTaskDeadlineTimeEnabled ? ` ${dayjs(task.deadline).format('HH:mm')}` : '')
+    : t('common.not_set');
+
+  const effectiveDueDateUtc = task.deadline ? dayjs.utc(task.deadline) : null;
+  const countdownText = getTimeText(task as any, t, effectiveDueDateUtc ?? undefined);
+
+  const isDone = task.deadlineDetails?.repeatFrequency && effectiveDueDateUtc
+    ? task.completedInstanceDates?.includes(effectiveDueDateUtc.format('YYYY-MM-DD')) ?? false
+    : !!task.completedAt;
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <View style={styles.appBar}>
+        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+          <Ionicons name="chevron-back" size={26} color={subColor} />
+          <Text style={styles.backButtonText}>{t('common.detail')}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.headerAction} onPress={() => setIsActionModalVisible(true)}>
+          <Ionicons name="ellipsis-vertical" size={24} color={subColor} />
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }}>
+        <Text style={styles.title}>{task.title}</Text>
+
+        <Text style={styles.field} numberOfLines={1}>
+          {`${deadlineText} ${countdownText}`}
+        </Text>
+
+        <Text style={styles.label}>{t('task_detail.memo')}</Text>
+        <Text style={styles.memo}>{task.memo || '-'}</Text>
+
+        {task.imageUris && task.imageUris.length > 0 && (
+          <>
+            <Text style={styles.label}>{t('task_detail.photo')}</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
+              {task.imageUris.map((uri, index) => (
+                <TouchableOpacity
+                  key={uri}
+                  onPress={() => setPreviewUri(uri)}
+                  style={{ width: imageSize, height: imageSize, marginBottom: imageMargin, marginRight: (index + 1) % 3 !== 0 ? imageMargin : 0 }}
+                >
+                  <Image source={{ uri }} style={styles.image} />
+                </TouchableOpacity>
+              ))}
+            </View>
+          </>
+        )}
+
+        <Modal visible={!!previewUri} transparent onRequestClose={() => setPreviewUri(null)}>
+          <TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'center', alignItems: 'center' }} onPress={() => setPreviewUri(null)}>
+            {previewUri && <Image source={{ uri: previewUri }} style={{ width: '90%', height: '80%' }} resizeMode="contain" />}
+          </TouchableOpacity>
+        </Modal>
+      </ScrollView>
+
+      <TaskActionSheet
+        visible={isActionModalVisible}
+        onClose={() => setIsActionModalVisible(false)}
+        onToggleDone={handleToggleDone}
+        onEdit={handleEdit}
+        onShare={handleShare}
+        onDelete={handleDelete}
+        isDone={isDone}
+        styles={styles}
+        subColor={subColor}
+      />
+
+      <ConfirmModal
+        visible={isDeleteConfirmVisible}
+        title={t('task_detail.delete_confirm_title')}
+        message={t('task_detail.delete_confirm')}
+        okText={t('common.delete')}
+        cancelText={t('common.cancel')}
+        onConfirm={confirmDelete}
+        onCancel={cancelDelete}
+        isOkDestructive
+      />
+    </SafeAreaView>
+  );
+}
