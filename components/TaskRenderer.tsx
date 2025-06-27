@@ -256,31 +256,9 @@ export const TaskRenderer: React.FC<TaskRendererProps> = ({
         />
       )}
       
-      {/* Drag indicator - visual feedback during drag */}
-      {isBeingDragged && (
-        <Rect
-          rect={rect(0, yPosition, 4, dimensions.taskHeight)}
-          paint={(() => {
-            const paint = Skia.Paint();
-            paint.setColor(Skia.Color(colors.accent));
-            return paint;
-          })()}
-          opacity={0.8}
-        />
-      )}
+      {/* Drag indicator - REMOVED per user request */}
       
-      {/* Drop zone indicator */}
-      {isDraggedOver && (
-        <Rect
-          rect={rect(0, yPosition - 1, canvasWidth, 2)}
-          paint={(() => {
-            const paint = Skia.Paint();
-            paint.setColor(Skia.Color(colors.accent));
-            return paint;
-          })()}
-          opacity={0.8}
-        />
-      )}
+      {/* Drop zone indicator - REMOVED per user request */}
     </>
   );
 };

@@ -984,13 +984,7 @@ export const useTasksScreenLogic = () => {
       // 🔥 Step 2: 楽観的更新（即座にUI反映）
       setTasks(optimisticTasks);
 
-      // 🔥 Step 3: 触覚フィードバック
-      try {
-        const Haptics = await import('expo-haptics');
-        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      } catch (error) {
-        // 触覚フィードバック失敗は無視
-      }
+      // 🔥 Step 3: 成功処理（触覚フィードバック廃止）
 
       // 🔥 Step 4: データベース同期（バックグラウンド）
       try {
@@ -1008,12 +1002,7 @@ export const useTasksScreenLogic = () => {
         setTasks(backupTasks);
         
         // エラー触覚フィードバック
-        try {
-          const Haptics = await import('expo-haptics');
-          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        } catch (error) {
-          // 触覚フィードバック失敗は無視
-        }
+        // エラー処理（触覚フィードバック廃止）
         
         throw dbError;
       }

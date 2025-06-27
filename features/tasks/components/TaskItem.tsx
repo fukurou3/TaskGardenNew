@@ -9,6 +9,7 @@ import relativeTime from 'dayjs/plugin/relativeTime';
 import { useRouter } from 'expo-router';
 
 import { DisplayableTaskItem } from '../types';
+import { DRAG_CONFIG } from '@/components/SkiaTaskCanvas/constants';
 import { createStyles } from '../styles';
 import { useAppTheme } from '@/hooks/ThemeContext';
 import { useTranslation } from 'react-i18next';
@@ -245,7 +246,7 @@ export const TaskItem = memo(({
       <TouchableOpacity
         onPress={handlePress}
         onLongPress={drag} // Use the library's drag function directly
-        delayLongPress={200} // Short delay for responsive feel
+        delayLongPress={DRAG_CONFIG.LONG_PRESS_DURATION} // Unified timing from constants
         style={itemContainerStyle}
         activeOpacity={0.7}
       >
@@ -259,7 +260,7 @@ export const TaskItem = memo(({
     <TouchableOpacity
       onPress={handlePress}
       onLongPress={handleLongPress}
-      delayLongPress={300}
+      delayLongPress={DRAG_CONFIG.LONG_PRESS_DURATION}
       style={itemContainerStyle}
       activeOpacity={0.7}
     >

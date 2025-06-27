@@ -1,6 +1,7 @@
 // components/SkiaTaskCanvas.tsx - Optimized Skia Canvas implementation
-import React, { useMemo, useCallback, useState, memo } from 'react';
+import React, { useMemo, useCallback, useState, memo, useEffect } from 'react';
 import { View, Dimensions } from 'react-native';
+import { useSharedValue, withTiming, useAnimatedReaction, runOnJS } from 'react-native-reanimated';
 import { 
   Canvas, 
   Rect, 
@@ -8,7 +9,9 @@ import {
   rrect, 
   rect,
   Text as SkiaText,
-  useFont
+  useFont,
+  Paint,
+  Skia
 } from '@shopify/react-native-skia';
 import { GestureDetector } from 'react-native-gesture-handler';
 import { useAppTheme } from '@/hooks/ThemeContext';
@@ -29,6 +32,7 @@ const SkiaTask = memo<SkiaTaskProps>(({
   isSelected, 
   isBeingDragged, 
   isDraggedOver, 
+  isLongPressed,
   y, 
   canvasWidth, 
   colors, 
@@ -36,9 +40,29 @@ const SkiaTask = memo<SkiaTaskProps>(({
   font 
 }) => {
   // Enhanced visual effects with constants
-  const opacity = isBeingDragged ? DRAG_CONFIG.DRAG_OPACITY : 1.0;
-  const scale = isBeingDragged ? DRAG_CONFIG.DRAG_SCALE : 1.0;
+  const opacity = isBeingDragged ? DRAG_CONFIG.DRAG_OPACITY : (isLongPressed ? 0.95 : 1.0);
+  const scale = isBeingDragged ? DRAG_CONFIG.DRAG_SCALE : (isLongPressed ? 1.02 : 1.0);
   const isCompleted = !!task.completedAt || task.isCompletedInstance || currentTab === 'completed';
+  
+  // Simple overlay state for long press - persists until drag ends
+  const [overlayOpacity, setOverlayOpacity] = useState(0);
+  const [isDragActive, setIsDragActive] = useState(false);
+  
+  // Track long press and drag lifecycle
+  useEffect(() => {
+    if (isLongPressed) {
+      // Fade in overlay when long press is detected
+      setOverlayOpacity(0.08);
+      setIsDragActive(true);
+    } else if (isBeingDragged) {
+      // Keep overlay during drag
+      setOverlayOpacity(0.08);
+    } else if (isDragActive && !isBeingDragged && !isLongPressed) {
+      // Fade out overlay only when drag completely ends
+      setOverlayOpacity(0);
+      setIsDragActive(false);
+    }
+  }, [isLongPressed, isBeingDragged, isDragActive]);
 
   // Task background with scaling using constants
   const scaledWidth = canvasWidth * scale;
@@ -68,46 +92,64 @@ const SkiaTask = memo<SkiaTaskProps>(({
 
   return (
     <>
-      {/* Drop zone indicator */}
-      {isDraggedOver && !isBeingDragged && (
-        <Rect 
-          rect={rect(0, y - DRAG_CONFIG.DROP_ZONE_HEIGHT, canvasWidth, DRAG_CONFIG.DROP_ZONE_HEIGHT)} 
-          color={colors.accent}
-          opacity={0.8} 
-        />
-      )}
+      {/* Drop zone indicator - REMOVED per user request */}
       
-      {/* Shadow effect for dragged items */}
-      {isBeingDragged && (
-        <RoundedRect 
-          rect={rrect(
-            rect(
-              offsetX + DRAG_CONFIG.SHADOW_OFFSET, 
-              y + DRAG_CONFIG.SHADOW_OFFSET, 
-              scaledWidth, 
-              scaledHeight
-            ), 
-            DRAG_CONFIG.BORDER_RADIUS, 
-            DRAG_CONFIG.BORDER_RADIUS
-          )} 
-          color={COLORS.SHADOW}
-          opacity={0.3} 
-        />
+      {/* Subtle shadow effect for dragged items and long press feedback */}
+      {(isBeingDragged || isLongPressed) && (
+        <>
+          <RoundedRect 
+            rect={rrect(
+              rect(
+                offsetX + DRAG_CONFIG.SHADOW_OFFSET, 
+                y + DRAG_CONFIG.SHADOW_OFFSET, 
+                scaledWidth, 
+                scaledHeight
+              ), 
+              DRAG_CONFIG.BORDER_RADIUS, 
+              DRAG_CONFIG.BORDER_RADIUS
+            )} 
+            color={COLORS.SHADOW}
+            opacity={0.15} 
+          />
+          <RoundedRect 
+            rect={rrect(
+              rect(
+                offsetX + 1, 
+                y + 1, 
+                scaledWidth, 
+                scaledHeight
+              ), 
+              DRAG_CONFIG.BORDER_RADIUS, 
+              DRAG_CONFIG.BORDER_RADIUS
+            )} 
+            color={COLORS.SHADOW}
+            opacity={0.08} 
+          />
+        </>
       )}
       
       {/* Task background */}
       <RoundedRect 
         rect={roundedRect} 
-        color={isSelected ? colors.selected : (isBeingDragged ? colors.background : colors.background)}
+        color={isSelected ? colors.selected : colors.background}
         opacity={opacity} 
       />
+      
+      {/* Long press dark overlay effect */}
+      {overlayOpacity > 0 && (
+        <RoundedRect 
+          rect={roundedRect}
+          color={colors.text}
+          opacity={overlayOpacity}
+        />
+      )}
       
       {/* Task border */}
       <RoundedRect 
         rect={roundedRect} 
         style="stroke"
-        strokeWidth={isBeingDragged ? 2 : 1}
-        color={isBeingDragged ? colors.accent : colors.border}
+        strokeWidth={1}
+        color={colors.border}
         opacity={opacity} 
       />
       
@@ -287,11 +329,12 @@ export const SkiaTaskCanvas = memo<SkiaTaskCanvasProps>(({
   }
   
   // Optimized drag state management
-  const [dragState, setDragState] = useState<DragState>({
+  const [dragState, setDragState] = useState({
     isDragging: false,
     dragIndex: -1,
     targetIndex: -1,
     dragY: 0,
+    isLongPressed: false,
   });
 
   // Memoized task positions with error handling
@@ -318,13 +361,14 @@ export const SkiaTaskCanvas = memo<SkiaTaskCanvasProps>(({
   }, [safeTasks.length, taskPositions]);
 
   // Optimized gesture handler with clean state management
-  const handleDragStateChange = useCallback((isDragging: boolean, dragIndex: number) => {
+  const handleDragStateChange = useCallback((isDragging: boolean, dragIndex: number, isLongPressed?: boolean) => {
     setDragState(prevState => ({
       ...prevState,
       isDragging,
       dragIndex,
       targetIndex: isDragging ? prevState.targetIndex : -1,
       dragY: isDragging ? prevState.dragY : 0,
+      isLongPressed: isLongPressed || false,
     }));
   }, []);
 
@@ -338,27 +382,45 @@ export const SkiaTaskCanvas = memo<SkiaTaskCanvasProps>(({
       
       // Calculate animated positions for other tasks
       if (prevState.dragIndex >= 0 && targetIdx >= 0) {
-        // Position calculation without console.log for performance
+        // Smooth position calculation with gradual transitions
         const updatedPositions = safeTasks.map((_, originalIndex) => {
           if (originalIndex === prevState.dragIndex) {
             return y; // Dragged task follows finger
           }
           
           let adjustedIndex = originalIndex;
+          let transitionProgress = 1; // Full transition by default
           
           if (prevState.dragIndex < targetIdx) {
-            // Dragging down
+            // Dragging down - create smooth gap opening
             if (originalIndex > prevState.dragIndex && originalIndex <= targetIdx) {
               adjustedIndex = originalIndex - 1;
+              // Add smooth transition based on drag proximity
+              const dragPosition = y / ITEM_HEIGHT;
+              const itemPosition = originalIndex;
+              const distance = Math.abs(dragPosition - itemPosition);
+              transitionProgress = Math.max(0, Math.min(1, 2 - distance)); // Smooth falloff
+              // Apply easing for more natural motion
+              transitionProgress = 1 - Math.pow(1 - transitionProgress, 3); // Ease-out cubic
             }
           } else if (prevState.dragIndex > targetIdx) {
-            // Dragging up
+            // Dragging up - create smooth gap opening
             if (originalIndex >= targetIdx && originalIndex < prevState.dragIndex) {
               adjustedIndex = originalIndex + 1;
+              // Add smooth transition based on drag proximity
+              const dragPosition = y / ITEM_HEIGHT;
+              const itemPosition = originalIndex;
+              const distance = Math.abs(dragPosition - itemPosition);
+              transitionProgress = Math.max(0, Math.min(1, 2 - distance)); // Smooth falloff
+              // Apply easing for more natural motion
+              transitionProgress = 1 - Math.pow(1 - transitionProgress, 3); // Ease-out cubic
             }
           }
           
-          return adjustedIndex * ITEM_HEIGHT;
+          // Smooth interpolation between original and target positions
+          const originalY = originalIndex * ITEM_HEIGHT;
+          const targetY = adjustedIndex * ITEM_HEIGHT;
+          return originalY + (targetY - originalY) * transitionProgress;
         });
       }
       
@@ -434,10 +496,14 @@ export const SkiaTaskCanvas = memo<SkiaTaskCanvasProps>(({
               color={colors.background}
             />
             
-            {/* Render all tasks with optimized positioning */}
+            {/* Render all tasks with proper Z-order (dragged task on top) */}
             {safeTasks.map((task, index) => {
               const isBeingDragged = dragState.isDragging && dragState.dragIndex === index;
               const isDraggedOver = dragState.isDragging && dragState.targetIndex === index && !isBeingDragged;
+              const isLongPressed = dragState.isLongPressed && dragState.dragIndex === index;
+              
+              // Skip dragged task in first pass - will render it last
+              if (isBeingDragged) return null;
               
               return (
                 <SkiaTask
@@ -445,8 +511,9 @@ export const SkiaTaskCanvas = memo<SkiaTaskCanvasProps>(({
                   task={task}
                   index={index}
                   isSelected={selectedIds.includes(task.keyId)}
-                  isBeingDragged={isBeingDragged}
+                  isBeingDragged={false}
                   isDraggedOver={isDraggedOver}
+                  isLongPressed={isLongPressed}
                   y={getTaskPosition(index)}
                   canvasWidth={canvasWidth}
                   colors={colors}
@@ -455,6 +522,24 @@ export const SkiaTaskCanvas = memo<SkiaTaskCanvasProps>(({
                 />
               );
             })}
+            
+            {/* Render dragged task last (on top of all others) */}
+            {dragState.isDragging && dragState.dragIndex >= 0 && dragState.dragIndex < safeTasks.length && (
+              <SkiaTask
+                key={`dragged-${safeTasks[dragState.dragIndex].keyId}`}
+                task={safeTasks[dragState.dragIndex]}
+                index={dragState.dragIndex}
+                isSelected={selectedIds.includes(safeTasks[dragState.dragIndex].keyId)}
+                isBeingDragged={true}
+                isDraggedOver={false}
+                isLongPressed={dragState.isLongPressed && dragState.dragIndex === dragState.dragIndex}
+                y={getTaskPosition(dragState.dragIndex)}
+                canvasWidth={canvasWidth}
+                colors={colors}
+                currentTab={currentTab}
+                font={titleFont}
+              />
+            )}
           </Canvas>
         </GestureDetector>
       </View>

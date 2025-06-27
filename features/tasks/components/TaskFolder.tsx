@@ -12,7 +12,6 @@ import { createStyles } from '../styles';
 import { fontSizes } from '@/constants/fontSizes';
 
 // ネイティブドラッグ&ドロップの準備
-import * as Haptics from 'expo-haptics';
 
 // 固定スタイル定数（再計算防止）
 const DEADLINE_CONTAINER_STYLE = { 
@@ -240,8 +239,6 @@ export const TaskFolder: React.FC<Props> = ({
             <SkiaTaskCanvas
               tasks={tasks}
               onTaskReorder={(from, to) => {
-                // 触覚フィードバック
-                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
                 // 親への通知
                 onTaskReorder?.(from, to);
               }}

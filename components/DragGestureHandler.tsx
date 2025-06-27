@@ -5,7 +5,6 @@ import { useSharedValue, runOnJS, runOnUI, useAnimatedReaction } from 'react-nat
 import { DisplayableTaskItem } from '@/features/tasks/types';
 import { DRAG_CONFIG, ITEM_HEIGHT } from './SkiaTaskCanvas/constants';
 import type { DragGestureConfig } from './SkiaTaskCanvas/types';
-import * as Haptics from 'expo-haptics';
 
 // Use DragState from types file
 
@@ -53,23 +52,6 @@ export const useDragGestureHandler = (config: DragGestureConfig) => {
     return Math.max(0, Math.min(y, maxY));
   };
 
-  const triggerHapticFeedback = useCallback((type: 'light' | 'medium' | 'heavy' = 'light') => {
-    try {
-      switch (type) {
-        case 'light':
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          break;
-        case 'medium':
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-          break;
-        case 'heavy':
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-          break;
-      }
-    } catch (error) {
-      console.warn('Haptic feedback failed:', error);
-    }
-  }, []);
 
   // Auto-scroll logic for long lists
   const handleAutoScroll = (gestureY: number) => {
@@ -84,30 +66,21 @@ export const useDragGestureHandler = (config: DragGestureConfig) => {
     }
   };
 
-  // Optimized drag gesture approach
+  // Pan gesture only active after long press
   const panGesture = Gesture.Pan()
     .minDistance(DRAG_CONFIG.MIN_DRAG_DISTANCE)
     .onStart((event) => {
       'worklet';
-      if (isSelecting) {
+      if (isSelecting || !longPressTriggered.value) {
         return;
       }
       
-      const taskIndex = getTaskIndexFromY(event.y);
-      if (taskIndex >= 0 && taskIndex < tasks.length) {
-        dragIndex.value = taskIndex;
-        startY.value = event.y;
-        dragY.value = event.y;
-        dragOffset.value = event.y - getTaskYPosition(taskIndex);
-        isDragging.value = true;
-        
-        // Safe haptic feedback
-        runOnJS(triggerHapticFeedback)('medium');
-        
-        // Notify parent
-        if (onDragStateChange) {
-          runOnJS(onDragStateChange)(true, taskIndex);
-        }
+      // Start dragging only if long press was triggered
+      isDragging.value = true;
+      
+      // Notify parent about drag start
+      if (onDragStateChange) {
+        runOnJS(onDragStateChange)(true, dragIndex.value, false);
       }
     })
     .onUpdate((event) => {
@@ -130,9 +103,6 @@ export const useDragGestureHandler = (config: DragGestureConfig) => {
         // Only update if there's a real change
         if (clampedTargetIndex !== targetIndex.value && clampedTargetIndex !== dragIndex.value) {
           targetIndex.value = clampedTargetIndex;
-          
-          // Subtle haptic for index changes
-          runOnJS(triggerHapticFeedback)('light');
         }
       }
     })
@@ -144,13 +114,12 @@ export const useDragGestureHandler = (config: DragGestureConfig) => {
         
         // Only reorder if there's a meaningful change
         if (fromIndex !== toIndex && toIndex >= 0 && toIndex < tasks.length) {
-          runOnJS(triggerHapticFeedback)('medium');
           runOnJS(onTaskReorder)(fromIndex, toIndex);
         }
         
         // Notify parent about drag end
         if (onDragStateChange) {
-          runOnJS(onDragStateChange)(false, -1);
+          runOnJS(onDragStateChange)(false, -1, false);
         }
       }
       
@@ -164,8 +133,45 @@ export const useDragGestureHandler = (config: DragGestureConfig) => {
       dragOffset.value = 0;
     });
 
-  // Long press gesture for selection mode
-  const longPressGesture = Gesture.LongPress()
+  // Long press gesture for drag initiation
+  const longPressGestureForDrag = Gesture.LongPress()
+    .minDuration(LONG_PRESS_DURATION)
+    .maxDistance(15)
+    .onStart((event) => {
+      'worklet';
+      if (isSelecting) {
+        return;
+      }
+      
+      const taskIndex = getTaskIndexFromY(event.y);
+      if (taskIndex >= 0 && taskIndex < tasks.length) {
+        longPressTriggered.value = true;
+        dragIndex.value = taskIndex;
+        startY.value = event.y;
+        dragY.value = event.y;
+        dragOffset.value = event.y - getTaskYPosition(taskIndex);
+        
+        // Notify parent about long press state for visual effects
+        if (onDragStateChange) {
+          runOnJS(onDragStateChange)(false, taskIndex, true); // long press detected
+        }
+      }
+    })
+    .onEnd(() => {
+      'worklet';
+      // Long press ended without drag - reset state
+      if (!isDragging.value) {
+        longPressTriggered.value = false;
+        dragIndex.value = -1;
+        
+        if (onDragStateChange) {
+          runOnJS(onDragStateChange)(false, -1, false);
+        }
+      }
+    });
+
+  // Long press gesture for selection mode (original)
+  const longPressGestureForSelection = Gesture.LongPress()
     .minDuration(LONG_PRESS_DURATION)
     .maxDistance(10)
     .onStart((event) => {
@@ -173,7 +179,6 @@ export const useDragGestureHandler = (config: DragGestureConfig) => {
       if (isSelecting && onLongPressSelect) {
         const taskIndex = getTaskIndexFromY(event.y);
         if (taskIndex >= 0 && taskIndex < tasks.length) {
-          runOnJS(triggerHapticFeedback)('medium');
           runOnJS(onLongPressSelect)('task', tasks[taskIndex].keyId);
         }
       }
@@ -191,22 +196,24 @@ export const useDragGestureHandler = (config: DragGestureConfig) => {
           // Check if tap is on checkbox area (left 60px of task)
           if (event.x <= 60 && onToggleTaskDone) {
             // Handle checkbox tap - toggle task completion
-            runOnJS(triggerHapticFeedback)('light');
             runOnJS(onToggleTaskDone)(task.keyId, task.instanceDate);
           }
         }
       }
     });
 
-  // Compose gestures based on context - simplified approach
+  // Compose gestures based on context
   const composedGesture = useMemo(() => {
     if (isSelecting) {
-      return Gesture.Race(longPressGesture, tapGesture);
+      return Gesture.Race(longPressGestureForSelection, tapGesture);
     } else {
-      // For drag mode, use pan gesture
-      return Gesture.Race(panGesture, tapGesture);
+      // For drag mode, combine long press + pan + tap
+      return Gesture.Race(
+        Gesture.Simultaneous(longPressGestureForDrag, panGesture),
+        tapGesture
+      );
     }
-  }, [isSelecting, panGesture, longPressGesture, tapGesture]);
+  }, [isSelecting, panGesture, longPressGestureForDrag, longPressGestureForSelection, tapGesture]);
 
   // Animated reaction to provide real-time feedback
   useAnimatedReaction(
@@ -229,6 +236,7 @@ export const useDragGestureHandler = (config: DragGestureConfig) => {
       dragIndex,
       dragY,
       targetIndex,
+      longPressTriggered,
     },
     // Helper methods for external use
     getDragState: (): DragState => {

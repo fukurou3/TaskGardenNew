@@ -9,19 +9,21 @@ export const DRAG_CONFIG = {
   
   // Gesture thresholds
   MIN_DRAG_DISTANCE: 10,
-  LONG_PRESS_DURATION: 300,
+  LONG_PRESS_DURATION: 300, // Stable value
   MAX_DRAG_DISTANCE: 15,
   
-  // Animation settings
+  // Animation settings (optimized for smooth gap animations)
   SPRING_CONFIG: {
-    damping: 15,
-    stiffness: 150,
+    damping: 25,     // Increased for smoother deceleration
+    stiffness: 120,  // Slightly increased for responsiveness
+    mass: 1,        // Standard mass
+    velocity: 0,    // No initial velocity
   },
   
   // Visual effects
-  DRAG_SCALE: 1.02,
-  DRAG_OPACITY: 0.9,
-  SHADOW_OFFSET: 2,
+  DRAG_SCALE: 1.05,
+  DRAG_OPACITY: 0.85,
+  SHADOW_OFFSET: 3,
   DROP_ZONE_HEIGHT: 4,
   
   // Layout

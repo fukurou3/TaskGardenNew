@@ -21,6 +21,7 @@ export interface SkiaTaskProps {
   readonly isSelected: boolean;
   readonly isBeingDragged: boolean;
   readonly isDraggedOver: boolean;
+  readonly isLongPressed: boolean;
   readonly y: number;
   readonly canvasWidth: number;
   readonly colors: ColorScheme;
@@ -46,7 +47,7 @@ export interface DragGestureConfig {
   readonly onLongPressSelect?: (type: 'task', id: string) => void;
   readonly isSelecting: boolean;
   readonly canvasHeight: number;
-  readonly onDragStateChange?: (isDragging: boolean, dragIndex: number) => void;
+  readonly onDragStateChange?: (isDragging: boolean, dragIndex: number, isLongPressed?: boolean) => void;
   readonly onDragUpdate?: (dragY: number, targetIndex: number) => void;
 }
 
