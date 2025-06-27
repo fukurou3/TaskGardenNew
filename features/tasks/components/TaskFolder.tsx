@@ -255,7 +255,8 @@ export const TaskFolder: React.FC<Props> = ({
               isSelecting={isSelecting}
               onLongPressSelect={onLongPressSelect}
               currentTab={currentTab}
-              canvasHeight={Math.max(300, tasks.length * 62)} // 動的高さ計算
+              canvasHeight={Math.max(300, tasks.length * 60)} // 動的高さ計算 (60px task height, very tight spacing)
+              isInsideFolder={true} // フォルダ内レイアウト指定
             />
           ) : (
             // 通常モード（期限順ソートまたはドラッグ無効時）

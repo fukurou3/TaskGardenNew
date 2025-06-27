@@ -26,7 +26,9 @@ export interface SkiaTaskProps {
   readonly canvasWidth: number;
   readonly colors: ColorScheme;
   readonly currentTab: 'incomplete' | 'completed';
-  readonly font: any | null; // Font from react-native-skia
+  readonly font: any | null; // Title font from react-native-skia
+  readonly deadlineFont?: any | null; // Deadline font from react-native-skia
+  readonly isInsideFolder?: boolean; // Distinguish folder vs standalone layout
 }
 
 export interface ColorScheme {
@@ -62,6 +64,7 @@ export interface SkiaTaskCanvasProps {
   readonly onLongPressSelect?: (type: 'task', id: string) => void;
   readonly currentTab: 'incomplete' | 'completed';
   readonly canvasHeight: number;
+  readonly isInsideFolder?: boolean; // Distinguish folder vs standalone layout
 }
 
 // Error types for better error handling

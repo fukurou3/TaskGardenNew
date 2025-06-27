@@ -113,12 +113,10 @@ const TaskCheckbox = memo(({ isDone, onToggle, subColor, styles }: { isDone: boo
 ));
 
 const TaskMainContent = memo(({ task, styles }: { task: DisplayableTaskItem; styles: any }) => (
-  <View style={styles.taskContent}>
-    <View style={styles.taskTextContainer}>
-      <Text style={styles.taskTitle} numberOfLines={2} ellipsizeMode="tail">
-        {task.title}
-      </Text>
-    </View>
+  <View style={styles.taskCenter}>
+    <Text style={styles.taskTitle} numberOfLines={2} ellipsizeMode="tail">
+      {task.title}
+    </Text>
   </View>
 ));
 

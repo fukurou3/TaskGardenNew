@@ -1,11 +1,17 @@
 // components/SkiaTaskCanvas/constants.ts - Drag & Drop Constants
 export const DRAG_CONFIG = {
-  // Task dimensions
-  TASK_HEIGHT: 60,
-  TASK_MARGIN: 2,
-  TASK_PADDING: 16,
-  BORDER_RADIUS: 8,
-  CHECKBOX_SIZE: 24,
+  // Task dimensions (very tight spacing)
+  TASK_HEIGHT: 60, // Further reduced for tighter spacing
+  TASK_MARGIN_HORIZONTAL: 16, // marginHorizontal from taskItemContainer
+  TASK_MARGIN_TOP: 0, // Minimal spacing
+  TASK_MARGIN_BOTTOM: 0, // Minimal spacing
+  TASK_PADDING_HORIZONTAL: 16, // paddingHorizontal from taskItemContainer
+  TASK_PADDING_VERTICAL: 10, // paddingVertical from taskItemContainer
+  BORDER_RADIUS: 12, // BORDER_RADIUS_MD from TaskItem
+  CHECKBOX_SIZE: 24, // EXACT match with TaskItem Ionicons size={24}
+  CHECKBOX_PADDING_RIGHT: 14, // paddingRight from checkboxContainer
+  CHECKBOX_PADDING_LEFT: 2, // paddingLeft from checkboxContainer
+  CHECKBOX_PADDING_VERTICAL: 8, // paddingVertical from checkboxContainer
   
   // Gesture thresholds
   MIN_DRAG_DISTANCE: 10,
@@ -26,8 +32,9 @@ export const DRAG_CONFIG = {
   SHADOW_OFFSET: 3,
   DROP_ZONE_HEIGHT: 4,
   
-  // Layout
-  CANVAS_PADDING: 32,
+  // Layout (match TaskItem spacing)
+  CANVAS_PADDING: 0, // Remove extra padding to match TaskItem layout
+  TASK_CENTER_MARGIN_RIGHT: 10, // marginRight from taskCenter
   DRAG_HANDLE_SIZE: 3,
   DRAG_HANDLE_SPACING: 6,
 } as const;
@@ -37,5 +44,5 @@ export const COLORS = {
   TRANSPARENT: 'transparent',
 } as const;
 
-// Calculate derived values
-export const ITEM_HEIGHT = DRAG_CONFIG.TASK_HEIGHT + DRAG_CONFIG.TASK_MARGIN;
+// Calculate derived values (tighter spacing)
+export const ITEM_HEIGHT = DRAG_CONFIG.TASK_HEIGHT; // Tighter spacing for folder items

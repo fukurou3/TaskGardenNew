@@ -256,20 +256,20 @@ export const createStyles = (isDark: boolean, subColor: string, fontSizeKey: Fon
         lineHeight: baseFontSize * 1.5,
     },
     taskItemContainer: {
-        backgroundColor: cardBackground,
-        marginHorizontal: 16,
-        marginTop: 4,
-        marginBottom: 2,
-        borderRadius: BORDER_RADIUS_MD,
+        backgroundColor: 'transparent', // Remove background to match custom order
+        marginHorizontal: 0, // Remove margin to match custom order
+        marginTop: 0, // Minimal spacing
+        marginBottom: 0, // Minimal spacing
+        borderRadius: 0, // Remove border radius
         paddingHorizontal: 16,
-        paddingVertical: 10,
-        ...shadowStyle,
+        paddingVertical: 2, // Match custom order tight spacing
+        // Remove shadow to match custom order
     },
     taskItem: {
         flexDirection: 'row',
         alignItems: 'center',
         position: 'relative' as 'relative',
-        minHeight: 70,
+        minHeight: 60, // Further reduced for tighter spacing
     },
     checkboxContainer: {
         paddingRight: 14,
@@ -343,11 +343,10 @@ export const createStyles = (isDark: boolean, subColor: string, fontSizeKey: Fon
         paddingVertical: 6,
     },
     folderTaskItemContainer: {
-        backgroundColor: cardBackground,
+        backgroundColor: 'transparent', // Remove background to match custom order
         paddingHorizontal: 16,
-        paddingVertical: 5,
-        borderBottomWidth: StyleSheet.hairlineWidth,
-        borderBottomColor: isDark ? '#404040' : '#E8E8E8',
+        paddingVertical: 1, // Match custom order tight spacing
+        // Remove borderBottomWidth to eliminate separator lines
         paddingLeft: 20,
     },
     folderTabsContainer: {
