@@ -1,14 +1,14 @@
 // app/(tabs)/draggable-test.tsx
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, Pressable } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, Pressable, ScrollView } from 'react-native';
 import DraggableFlatList, { ScaleDecorator } from 'react-native-draggable-flatlist';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useSharedValue, useAnimatedReaction, runOnJS, withSpring, withTiming, useDerivedValue } from 'react-native-reanimated';
 
 import { useAppTheme } from '@/hooks/ThemeContext';
 import { useTranslation } from 'react-i18next';
 import { TaskItem } from '@/features/tasks/components/TaskItem';
+import { TaskFolder } from '@/features/tasks/components/TaskFolder';
 import { createStyles } from '@/features/tasks/styles';
 import { FontSizeContext } from '@/context/FontSizeContext';
 import { useContext } from 'react';
@@ -34,20 +34,27 @@ export default function DraggableTestScreen() {
   const [isLoading, setIsLoading] = useState(true);
   
   // Reorder mode state
-  const [isReorderMode, setIsReorderMode] = useState(false);
-  const [hasChanges, setHasChanges] = useState(false);
+  const [isTaskReorderMode, setIsTaskReorderMode] = useState(false);
+  const [taskReorderState, setTaskReorderState] = useState<{
+    isReorderMode: boolean;
+    hasChanges: boolean;
+    onConfirm: (() => void) | null;
+    onCancel: (() => void) | null;
+  }>({
+    isReorderMode: false,
+    hasChanges: false,
+    onConfirm: null,
+    onCancel: null,
+  });
   
-  // Reorder mode state - シンプルな状態管理に戻す
-  const [pendingTasks, setPendingTasks] = useState<DisplayableTaskItem[]>([]);
+  // フォルダー分けされたタスク
+  const [tasksByFolder, setTasksByFolder] = useState<Map<string, DisplayableTaskItem[]>>(new Map());
+  const [folders, setFolders] = useState<string[]>([]);
+  const [isTaskDragging, setIsTaskDragging] = useState(false);
   
-  // Shared values for UI thread operations - 必要最小限に減らす
-  const isDragging = useSharedValue(false);
-  const draggedTaskId = useSharedValue<string | null>(null);
-  
-  // スクロール制御用の状態
-  const [isDragActive, setIsDragActive] = useState(false);
+  const noFolderName = t('common.no_folder_name', 'フォルダなし');
 
-  // Load real tasks from database (using same method as useTasksScreenLogic)
+  // Load real tasks from database and organize by folders
   const loadTasks = useCallback(async () => {
     try {
       setIsLoading(true);
@@ -84,15 +91,40 @@ export default function DraggableTestScreen() {
             return dayjs(a.displaySortDate).diff(dayjs(b.displaySortDate));
           });
         
+        // Organize tasks by folder
+        const folderMap = new Map<string, DisplayableTaskItem[]>();
+        const folderSet = new Set<string>();
+        
+        displayableTasks.forEach(task => {
+          const folderName = task.folder || noFolderName;
+          folderSet.add(folderName);
+          
+          if (!folderMap.has(folderName)) {
+            folderMap.set(folderName, []);
+          }
+          folderMap.get(folderName)!.push(task);
+        });
+        
+        // Sort folders: noFolderName first, then alphabetically
+        const sortedFolders = Array.from(folderSet).sort((a, b) => {
+          if (a === noFolderName) return -1;
+          if (b === noFolderName) return 1;
+          return a.localeCompare(b);
+        });
+        
         setTasks(displayableTasks);
+        setTasksByFolder(folderMap);
+        setFolders(sortedFolders);
       }
     } catch (error) {
       console.error('Failed to load tasks:', error);
       setTasks([]);
+      setTasksByFolder(new Map());
+      setFolders([]);
     } finally {
       setIsLoading(false);
     }
-  }, [currentTab]);
+  }, [currentTab, noFolderName]);
 
   useEffect(() => {
     loadTasks();
@@ -116,57 +148,62 @@ export default function DraggableTestScreen() {
     }
   }, [tasks, loadTasks]);
 
-  // シンプルな並び替え処理 - DraggableFlatListの標準動作に任せる
-  const handleDragEnd = useCallback((data: DisplayableTaskItem[], from: number, to: number) => {
-    if (from === to) return;
-    
-    // シンプルに新しい順序で更新
-    setPendingTasks(data);
-    setHasChanges(true);
+  // 並べ替えモード状態変更ハンドラー
+  const handleReorderModeChange = useCallback((
+    isReorderMode: boolean, 
+    hasChanges: boolean, 
+    onConfirm: () => void, 
+    onCancel: () => void
+  ) => {
+    setIsTaskReorderMode(isReorderMode);
+    setTaskReorderState({
+      isReorderMode,
+      hasChanges,
+      onConfirm,
+      onCancel,
+    });
   }, []);
-  
-  
-  // Confirm reorder and update database
-  const handleConfirmReorder = useCallback(async () => {
-    if (!hasChanges) {
-      setIsReorderMode(false);
-      return;
-    }
-    
-    try {
-      // Apply changes to main state (this triggers re-render)
-      setTasks([...pendingTasks]);
-      
-      // Update database if method exists
+
+  // Task reorder handler for specific folder
+  const createTaskReorderHandler = useCallback((folderName: string) => {
+    return async (fromIndex: number, toIndex: number) => {
       try {
-        if (TasksDatabase.updateTaskOrder) {
-          // Update all task orders
-          for (let i = 0; i < pendingTasks.length; i++) {
-            await TasksDatabase.updateTaskOrder(pendingTasks[i].id, i);
+        const folderTasks = tasksByFolder.get(folderName) || [];
+        const newTasks = [...folderTasks];
+        const [movedTask] = newTasks.splice(fromIndex, 1);
+        newTasks.splice(toIndex, 0, movedTask);
+        
+        // Update folder tasks
+        setTasksByFolder(prev => {
+          const newMap = new Map(prev);
+          newMap.set(folderName, newTasks);
+          return newMap;
+        });
+        
+        // Update database if method exists
+        try {
+          if (TasksDatabase.updateTaskOrder) {
+            for (let i = 0; i < newTasks.length; i++) {
+              await TasksDatabase.updateTaskOrder(newTasks[i].id, i);
+            }
           }
+        } catch (dbError) {
+          console.log('Task reorder in DB not supported, keeping local order');
         }
-      } catch (dbError) {
-        // Task reorder in DB not supported, keeping local order
+      } catch (error) {
+        console.error('Failed to reorder tasks:', error);
+        await loadTasks(); // Reload on error
       }
-    } catch (error) {
-      console.error('Failed to confirm reorder:', error);
-      // Reload on error
-      await loadTasks();
-    } finally {
-      setIsReorderMode(false);
-      setHasChanges(false);
-    }
-  }, [hasChanges, pendingTasks, loadTasks]);
-  
-  // Cancel reorder mode
-  const handleCancelReorder = useCallback(() => {
-    setIsReorderMode(false);
-    setPendingTasks([]);
-    setHasChanges(false);
+    };
+  }, [tasksByFolder, loadTasks]);
+
+  // Handle task drag state changes to control outer scroll
+  const handleTaskDragStateChange = useCallback((isDragging: boolean) => {
+    setIsTaskDragging(isDragging);
   }, []);
 
   const handleLongPressSelect = useCallback((id: string) => {
-    if (isReorderMode) {
+    if (isTaskReorderMode) {
       return;
     }
     
@@ -177,28 +214,27 @@ export default function DraggableTestScreen() {
           : [...prev, id]
       );
     } else {
-      // 並び替えモードに切り替え
-      setIsReorderMode(true);
-      setPendingTasks([...tasks]);
-      setHasChanges(false);
+      // Enter task reorder mode
+      setIsTaskReorderMode(true);
+      setTaskReorderState({
+        isReorderMode: true,
+        hasChanges: false,
+        onConfirm: () => {
+          setIsTaskReorderMode(false);
+          setTaskReorderState(prev => ({ ...prev, isReorderMode: false, hasChanges: false }));
+        },
+        onCancel: () => {
+          setIsTaskReorderMode(false);
+          setTaskReorderState(prev => ({ ...prev, isReorderMode: false, hasChanges: false }));
+          loadTasks(); // Reload to discard changes
+        },
+      });
     }
-  }, [isSelecting, isReorderMode, tasks]);
+  }, [isSelecting, isTaskReorderMode, loadTasks]);
 
-  const handleTaskPress = useCallback((taskId: string) => {
-    if (isReorderMode) {
-      // Do nothing in reorder mode
-      return;
-    }
-    
-    if (isSelecting) {
-      handleLongPressSelect(taskId);
-    } else {
-      router.push(`/task-detail/${taskId}`);
-    }
-  }, [isSelecting, isReorderMode, handleLongPressSelect, router]);
 
-  // Styles
-  const styles = useMemo(() => createStyles(isDark, subColor, fontSizeKey), [isDark, subColor, fontSizeKey]);
+  // Styles - パフォーマンス最適化のため直接作成
+  const styles = createStyles(isDark, subColor, fontSizeKey);
 
   const screenStyles = StyleSheet.create({
     container: {
@@ -295,113 +331,6 @@ export default function DraggableTestScreen() {
     },
   });
 
-  // Custom task wrapper component - シンプルな実装
-  const CustomTaskWrapper = useCallback(({ item, drag, isActive }: any) => {
-    
-    return (
-      <Pressable
-        onLongPress={() => {
-          if (!isReorderMode) {
-            handleLongPressSelect(item.keyId);
-          }
-        }}
-        onPress={() => {
-          if (isReorderMode) {
-            return;
-          }
-          if (isSelecting) {
-            handleLongPressSelect(item.keyId);
-          } else {
-            router.push(`/task-detail/${item.id}`);
-          }
-        }}
-        delayLongPress={500}
-        disabled={isReorderMode} // 並び替えモード時はPressableを無効化
-        style={({ pressed }) => [{
-          flexDirection: 'row',
-          alignItems: 'center',
-          backgroundColor: isReorderMode 
-            ? (isDark ? '#1C1C1E' : '#F2F2F7') 
-            : pressed 
-              ? (isDark ? '#2C2C2E' : '#F0F0F0')
-              : 'transparent',
-          paddingRight: isReorderMode ? 16 : 0,
-        }]}
-      >
-        <View style={{ flex: 1 }}>
-          <View 
-            style={{ 
-              pointerEvents: isReorderMode ? 'none' : 'auto' // リオーダーモード時はタッチイベントを無効化
-            }}
-          >
-            <TaskItem
-              task={item}
-              onToggle={isReorderMode ? () => {} : handleToggleTaskDone}
-              isSelecting={isSelecting && !isReorderMode}
-              selectedIds={selectedIds}
-              onLongPressSelect={(type, id) => {
-                if (!isReorderMode && !isSelecting) {
-                  handleLongPressSelect(id);
-                }
-              }}
-              currentTab={currentTab}
-              isDraggable={false} // Always false, we handle dragging separately
-              isActive={isActive}
-            />
-          </View>
-        </View>
-        
-        {/* つまみ（3つの点）- 右側に配置、リオーダーモード時のみ表示 */}
-        {isReorderMode && (
-          <TouchableOpacity
-            onLongPress={drag}
-            delayLongPress={100}
-            style={{
-              paddingVertical: 16,
-              paddingHorizontal: 16,
-              justifyContent: 'center',
-              alignItems: 'center',
-              backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
-              borderRadius: 8,
-              marginRight: 8,
-              marginLeft: 8,
-              minWidth: 44,
-              minHeight: 44,
-            }}
-            activeOpacity={0.7}
-          >
-            <View style={{
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: 3,
-            }}>
-              {Array.from({ length: 3 }, (_, i) => (
-                <View
-                  key={i}
-                  style={{
-                    width: 4,
-                    height: 4,
-                    backgroundColor: isDark ? '#8E8E93' : '#C7C7CC',
-                    borderRadius: 2,
-                    opacity: 0.8,
-                  }}
-                />
-              ))}
-            </View>
-          </TouchableOpacity>
-        )}
-      </Pressable>
-    );
-  }, [isReorderMode, isSelecting, isDark, handleLongPressSelect, router]); // 依存関係を追加
-  
-  // Render draggable task item
-  const renderItem = useCallback(({ item, drag, isActive }: any) => {
-    return (
-      <ScaleDecorator>
-        <CustomTaskWrapper item={item} drag={drag} isActive={isActive} />
-      </ScaleDecorator>
-    );
-  }, [isReorderMode]);
 
   return (
     <SafeAreaView style={screenStyles.container}>
@@ -451,7 +380,7 @@ export default function DraggableTestScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Task List */}
+      {/* Task List - Folder-based */}
       <View style={screenStyles.listContainer}>
         {isLoading ? (
           <View style={screenStyles.emptyContainer}>
@@ -469,48 +398,178 @@ export default function DraggableTestScreen() {
             </Text>
           </View>
         ) : (
-          <>
-            <DraggableFlatList
-              key={`draggable-${isReorderMode ? 'reorder' : 'normal'}-${currentTab}`} // 動的key
-              data={isReorderMode ? pendingTasks : tasks}
-              renderItem={renderItem}
-              keyExtractor={(item) => item.keyId}
-              onDragBegin={({ from }) => {
-                if (isReorderMode) {
-                  isDragging.value = true;
-                  draggedTaskId.value = pendingTasks[from]?.keyId || null;
-                  setIsDragActive(true); // ドラッグ開始時にスクロール制御
-                }
-              }}
-              onDragEnd={({ data, from, to }) => {
-                if (isReorderMode && from !== to) {
-                  handleDragEnd(data, from, to);
-                }
-                // ドラッグ終了時のクリーンアップ
-                isDragging.value = false;
-                draggedTaskId.value = null;
-                setIsDragActive(false); // ドラッグ終了時にスクロール制御解除
-              }}
-              activationDistance={isReorderMode ? 0 : 99999}
-              dragItemOverflow={false}
-              simultaneousHandlers={[]}
-              scrollEnabled={true}
-              panGestureHandlerProps={{
-                // 並び替えモード時のみPanGestureを有効化
-                enabled: isReorderMode,
-                minDist: isReorderMode ? 5 : 999,
-                activeOffsetX: isReorderMode ? [-10, 10] : undefined,
-                activeOffsetY: isReorderMode ? [-10, 10] : undefined,
-                failOffsetX: isReorderMode ? undefined : [-5, 5],
-                failOffsetY: isReorderMode ? undefined : [-5, 5],
-              }}
-            />
-          </>
+          <ScrollView 
+            style={{ flex: 1 }}
+            contentContainerStyle={{ 
+              paddingTop: 8, 
+              paddingBottom: isTaskReorderMode ? 120 : 100 
+            }}
+            showsVerticalScrollIndicator={true}
+            scrollEnabled={!isTaskReorderMode}
+          >
+            {folders.map((folderName, folderIndex) => {
+              const folderTasks = tasksByFolder.get(folderName) || [];
+              if (folderTasks.length === 0) return null;
+              
+              return (
+                <View key={`folder-section-${folderIndex}`} style={{ marginBottom: 16 }}>
+                  {/* Fixed Folder Header */}
+                  <View style={{
+                    paddingHorizontal: 16,
+                    paddingVertical: 12,
+                    backgroundColor: isDark ? '#1C1C1E' : '#F8F8F8',
+                    borderBottomWidth: StyleSheet.hairlineWidth,
+                    borderBottomColor: isDark ? '#3A3A3C' : '#D1D1D6',
+                    marginBottom: 8,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                  }}>
+                    <Ionicons
+                      name="folder-open-outline"
+                      size={20}
+                      color={isDark ? '#E0E0E0' : '#333333'}
+                      style={{ marginRight: 10 }}
+                    />
+                    <Text style={{
+                      fontSize: 16,
+                      fontWeight: '600',
+                      color: isDark ? '#FFFFFF' : '#000000',
+                    }}>
+                      {folderName === noFolderName ? 'フォルダなし' : folderName}
+                    </Text>
+                  </View>
+                  
+                  {/* Draggable Task List for this folder */}
+                  {isTaskReorderMode ? (
+                    <DraggableFlatList
+                      data={folderTasks}
+                      renderItem={({ item, drag, isActive }) => (
+                        <Pressable
+                          style={({ pressed }) => [{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            backgroundColor: pressed 
+                              ? (isDark ? '#2C2C2E' : '#F0F0F0')
+                              : 'transparent',
+                            paddingRight: 16,
+                          }]}
+                        >
+                          <View style={{ flex: 1 }}>
+                            <View style={{ pointerEvents: 'none' }}>
+                              <TaskItem
+                                task={item}
+                                onToggle={() => {}}
+                                isSelecting={false}
+                                selectedIds={[]}
+                                onLongPressSelect={() => {}}
+                                currentTab={currentTab}
+                                isDraggable={false}
+                                isActive={isActive}
+                              />
+                            </View>
+                          </View>
+                          
+                          {/* Drag handle */}
+                          <TouchableOpacity
+                            onPressIn={drag}
+                            delayPressIn={0}
+                            activeOpacity={0.8}
+                            style={{
+                              paddingVertical: 16,
+                              paddingHorizontal: 16,
+                              justifyContent: 'center',
+                              alignItems: 'center',
+                              backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+                              borderRadius: 8,
+                              marginRight: 8,
+                              marginLeft: 8,
+                              minWidth: 44,
+                              minHeight: 44,
+                            }}
+                          >
+                            <View style={{
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              gap: 3,
+                            }}>
+                              {Array.from({ length: 3 }, (_, i) => (
+                                <View
+                                  key={i}
+                                  style={{
+                                    width: 4,
+                                    height: 4,
+                                    backgroundColor: isDark ? '#8E8E93' : '#C7C7CC',
+                                    borderRadius: 2,
+                                    opacity: 0.8,
+                                  }}
+                                />
+                              ))}
+                            </View>
+                          </TouchableOpacity>
+                        </Pressable>
+                      )}
+                      keyExtractor={(item) => item.keyId}
+                      onDragEnd={({ data, from, to }) => {
+                        if (from !== to) {
+                          // Update this folder's tasks
+                          setTasksByFolder(prev => {
+                            const newMap = new Map(prev);
+                            newMap.set(folderName, data);
+                            return newMap;
+                          });
+                          setTaskReorderState(prev => ({ ...prev, hasChanges: true }));
+                        }
+                      }}
+                      activationDistance={0}
+                      dragItemOverflow={false}
+                      scrollEnabled={false}
+                      nestedScrollEnabled={false}
+                      animationConfig={{
+                        damping: 20,
+                        mass: 0.2,
+                        stiffness: 100,
+                        overshootClamping: true,
+                        restSpeedThreshold: 0.2,
+                        restDisplacementThreshold: 0.2,
+                      }}
+                    />
+                  ) : (
+                    // Normal task list
+                    folderTasks.map((item, index) => (
+                      <Pressable
+                        key={item.keyId}
+                        onLongPress={() => {
+                          if (!isSelecting) {
+                            handleLongPressSelect(item.keyId);
+                          }
+                        }}
+                        delayLongPress={500}
+                      >
+                        <TaskItem
+                          task={item}
+                          onToggle={handleToggleTaskDone}
+                          isSelecting={isSelecting}
+                          selectedIds={selectedIds}
+                          onLongPressSelect={(type, id) => {
+                            if (!isSelecting) {
+                              handleLongPressSelect(id);
+                            }
+                          }}
+                          currentTab={currentTab}
+                          isDraggable={false}
+                        />
+                      </Pressable>
+                    ))
+                  )}
+                </View>
+              );
+            })}
+          </ScrollView>
         )}
       </View>
 
       {/* Selection Bar */}
-      {isSelecting && !isReorderMode && (
+      {isSelecting && !isTaskReorderMode && (
         <View style={screenStyles.selectionBar}>
           <TouchableOpacity 
             style={screenStyles.selectionAction}
@@ -540,48 +599,77 @@ export default function DraggableTestScreen() {
         </View>
       )}
       
-      {/* Reorder Mode Bar */}
-      {isReorderMode && (
-        <View style={[screenStyles.selectionBar, { backgroundColor: isDark ? '#2C2C2E' : '#FFFFFF' }]}>
+      {/* Reorder Mode Buttons - 独立したボタンエリア */}
+      {taskReorderState.isReorderMode && (
+        <View style={{
+          position: 'absolute',
+          bottom: 20,
+          left: 20,
+          right: 20,
+          flexDirection: 'row',
+          justifyContent: 'space-between',
+          gap: 16,
+        }}>
           <TouchableOpacity 
-            style={screenStyles.selectionAction}
-            onPress={handleCancelReorder}
+            style={{
+              backgroundColor: isDark ? '#48484A' : '#E5E5EA',
+              borderRadius: 12,
+              paddingHorizontal: 24,
+              paddingVertical: 14,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flex: 1,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.1,
+              shadowRadius: 4,
+              elevation: 4,
+            }}
+            onPress={() => taskReorderState.onCancel?.()}
           >
-            <Ionicons name="close" size={24} color={isDark ? '#FF6B6B' : '#FF3B30'} />
-            <Text style={[screenStyles.selectionActionText, { color: isDark ? '#FF6B6B' : '#FF3B30' }]}>
+            <Ionicons name="close" size={20} color={isDark ? '#FFFFFF' : '#000000'} />
+            <Text style={{ 
+              color: isDark ? '#FFFFFF' : '#000000',
+              fontWeight: '600',
+              marginLeft: 8,
+              fontSize: 16,
+            }}>
               {t('common.cancel', 'キャンセル')}
             </Text>
           </TouchableOpacity>
           
-          <View style={{ alignItems: 'center' }}>
-            <Ionicons name="swap-vertical" size={24} color={subColor} />
-            <Text style={[screenStyles.selectionActionText, { fontSize: 14, fontWeight: '600' }]}>
-              {t('reorder.drag_to_reorder', 'ドラッグして並び替え')}
-            </Text>
-          </View>
-          
           <TouchableOpacity 
-            style={[screenStyles.selectionAction, { 
-              backgroundColor: hasChanges ? subColor : (isDark ? '#48484A' : '#E5E5EA'),
-              borderRadius: 8,
-              paddingHorizontal: 16,
-              paddingVertical: 8,
-            }]}
-            onPress={handleConfirmReorder}
-            disabled={!hasChanges}
+            style={{
+              backgroundColor: taskReorderState.hasChanges ? subColor : (isDark ? '#48484A' : '#E5E5EA'),
+              borderRadius: 12,
+              paddingHorizontal: 24,
+              paddingVertical: 14,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flex: 1,
+              opacity: taskReorderState.hasChanges ? 1 : 0.6,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: taskReorderState.hasChanges ? 0.2 : 0.1,
+              shadowRadius: 4,
+              elevation: 4,
+            }}
+            onPress={() => taskReorderState.onConfirm?.()}
+            disabled={!taskReorderState.hasChanges}
           >
             <Ionicons 
               name="checkmark" 
-              size={24} 
-              color={hasChanges ? '#FFFFFF' : (isDark ? '#8E8E93' : '#C7C7CC')} 
+              size={20} 
+              color={taskReorderState.hasChanges ? '#FFFFFF' : (isDark ? '#8E8E93' : '#C7C7CC')} 
             />
-            <Text style={[
-              screenStyles.selectionActionText, 
-              { 
-                color: hasChanges ? '#FFFFFF' : (isDark ? '#8E8E93' : '#C7C7CC'),
-                fontWeight: '600'
-              }
-            ]}>
+            <Text style={{ 
+              color: taskReorderState.hasChanges ? '#FFFFFF' : (isDark ? '#8E8E93' : '#C7C7CC'),
+              fontWeight: '600',
+              marginLeft: 8,
+              fontSize: 16,
+            }}>
               {t('common.done', '完了')}
             </Text>
           </TouchableOpacity>

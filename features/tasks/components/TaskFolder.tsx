@@ -1,6 +1,6 @@
 // app/features/tasks/components/TaskFolder.tsx
 import React, { useContext, useState, useCallback, useMemo, useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, FlatList, Animated } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, FlatList, Animated, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import DraggableFlatList, { ScaleDecorator } from 'react-native-draggable-flatlist';
 import { DisplayableTaskItem } from '../types';
@@ -185,87 +185,141 @@ export const TaskFolder: React.FC<Props> = ({
     setHasChanges(false);
   }, [tasks]);
   
-  // 6つの点でのドラッグ並び替え
+  // Long-press drag functionality (from test screen)
+  const handleLongPressSelect = useCallback((id: string) => {
+    if (isTaskReorderMode || isSelecting) {
+      return;
+    }
+    
+    // Enter task reorder mode
+    onReorderModeChange?.(true, false, handleConfirmReorder, handleCancelReorder);
+  }, [isTaskReorderMode, isSelecting, onReorderModeChange]);
+
+  // 6つの点でのドラッグ並び替え + Long-press functionality
   const renderDraggableTaskItem = useCallback(({ item, drag, isActive }: any) => {
     return (
-      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+      <Pressable
+        onLongPress={() => {
+          if (!isTaskReorderMode) {
+            handleLongPressSelect(item.keyId);
+          }
+        }}
+        onPress={() => {
+          if (isTaskReorderMode) {
+            return;
+          }
+          // Handle task tap in normal mode
+        }}
+        delayLongPress={500}
+        disabled={isTaskReorderMode}
+        style={({ pressed }) => [{
+          flexDirection: 'row',
+          alignItems: 'center',
+          backgroundColor: isTaskReorderMode 
+            ? (isDark ? '#1C1C1E' : '#F2F2F7') 
+            : pressed 
+              ? (isDark ? '#2C2C2E' : '#F0F0F0')
+              : 'transparent',
+          paddingRight: isTaskReorderMode ? 16 : 0,
+        }]}
+      >
         {/* タスク内容部分 - ドラッグ無効、通常タッチ可能 */}
         <View 
           style={{ flex: 1 }}
-          pointerEvents="box-none" // 子要素のタッチイベントを通す
+          pointerEvents={isTaskReorderMode ? 'none' : 'auto'}
         >
           <TaskItem
             task={item}
-            onToggle={onToggleTaskDone}
+            onToggle={isTaskReorderMode ? () => {} : onToggleTaskDone}
             isSelecting={false}
             selectedIds={[]}
-            onLongPressSelect={() => {}}
+            onLongPressSelect={(type, id) => {
+              if (!isTaskReorderMode && !isSelecting) {
+                handleLongPressSelect(id);
+              }
+            }}
             currentTab={currentTab}
             isInsideFolder={true}
             isLastItem={false}
             isDraggable={false}
-            isActive={false}
+            isActive={isActive}
           />
         </View>
         
         {/* 3つの点 - ドラッグハンドル */}
         {isTaskReorderMode && (
-          <ScaleDecorator>
-            <TouchableOpacity
-              onLongPress={drag}
-              delayLongPress={200}
-              style={{
-                padding: 16,
-                justifyContent: 'center',
-                alignItems: 'center',
-                backgroundColor: 'transparent', // タスク背景と同じ透明背景
-                marginLeft: 8,
-                borderRadius: 8,
-                minWidth: 40,
-              }}
-              activeOpacity={0.8}
-            >
-              <View style={{
-                flexDirection: 'column',
-                gap: 3,
-              }}>
-                {Array.from({ length: 3 }, (_, i) => (
-                  <View
-                    key={i}
-                    style={{
-                      width: 4,
-                      height: 4,
-                      backgroundColor: isDark ? '#8E8E93' : '#C7C7CC',
-                      borderRadius: 2,
-                    }}
-                  />
-                ))}
-              </View>
-            </TouchableOpacity>
-          </ScaleDecorator>
+          <TouchableOpacity
+            onPressIn={drag}
+            delayPressIn={0}
+            activeOpacity={0.8}
+            style={{
+              paddingVertical: 16,
+              paddingHorizontal: 16,
+              justifyContent: 'center',
+              alignItems: 'center',
+              backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+              borderRadius: 8,
+              marginRight: 8,
+              marginLeft: 8,
+              minWidth: 44,
+              minHeight: 44,
+            }}
+          >
+            <View style={{
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 3,
+            }}>
+              {Array.from({ length: 3 }, (_, i) => (
+                <View
+                  key={i}
+                  style={{
+                    width: 4,
+                    height: 4,
+                    backgroundColor: isDark ? '#8E8E93' : '#C7C7CC',
+                    borderRadius: 2,
+                    opacity: 0.8,
+                  }}
+                />
+              ))}
+            </View>
+          </TouchableOpacity>
         )}
-      </View>
+      </Pressable>
     );
-  }, [isTaskReorderMode, onToggleTaskDone, currentTab, isDark]);
+  }, [isTaskReorderMode, onToggleTaskDone, currentTab, isDark, handleLongPressSelect, isSelecting]);
   
 
-  // 通常TaskItem
+  // 通常TaskItem with long-press support
   const renderRegularTaskItem = useCallback(({ item, index }: { item: DisplayableTaskItem, index: number }) => {
     return (
-      <TaskItem
-        key={item.keyId}
-        task={item}
-        onToggle={onToggleTaskDone}
-        isSelecting={isSelecting}
-        selectedIds={selectedIds}
-        onLongPressSelect={() => {}}
-        currentTab={currentTab}
-        isInsideFolder={true}
-        isLastItem={index === tasks.length - 1}
-        isDraggable={false}
-      />
+      <Pressable
+        onLongPress={() => {
+          if (!isTaskReorderMode && !isSelecting && sortMode === 'custom' && currentTab === 'incomplete') {
+            handleLongPressSelect(item.keyId);
+          }
+        }}
+        delayLongPress={500}
+      >
+        <TaskItem
+          key={item.keyId}
+          task={item}
+          onToggle={onToggleTaskDone}
+          isSelecting={isSelecting}
+          selectedIds={selectedIds}
+          onLongPressSelect={(type, id) => {
+            if (!isTaskReorderMode && !isSelecting && sortMode === 'custom' && currentTab === 'incomplete') {
+              handleLongPressSelect(id);
+            }
+          }}
+          currentTab={currentTab}
+          isInsideFolder={true}
+          isLastItem={index === tasks.length - 1}
+          isDraggable={false}
+        />
+      </Pressable>
     );
-  }, [tasks.length, onToggleTaskDone, isSelecting, selectedIds, currentTab]);
+  }, [tasks.length, onToggleTaskDone, isSelecting, selectedIds, currentTab, isTaskReorderMode, sortMode, handleLongPressSelect]);
 
   // Mock animations since Reanimated is disabled
   const animatedFolderHeaderStyle = {
@@ -329,6 +383,7 @@ export const TaskFolder: React.FC<Props> = ({
           {isTaskReorderMode ? (
             // 並べ替えモード - DraggableFlatListを独立コンテナで分離
             <DraggableFlatList
+              key={`reorder-${folderName}`}
               data={pendingTasks}
               renderItem={renderDraggableTaskItem}
               keyExtractor={(item) => item.keyId}
@@ -343,11 +398,27 @@ export const TaskFolder: React.FC<Props> = ({
                 // ドラッグ開始時に外側のスクロールを無効化
                 onTaskDragStateChange?.(true);
               }}
-              activationDistance={20}
-              dragItemOverflow={false}
+              activationDistance={isTaskReorderMode ? 0 : 99999}
+              dragItemOverflow={true}
               scrollEnabled={true}
-              nestedScrollEnabled={true}
-              simultaneousHandlers={[]}
+              autoscrollThreshold={50}
+              autoscrollSpeed={100}
+              animationConfig={{
+                damping: 20,
+                mass: 0.2,
+                stiffness: 100,
+                overshootClamping: true,
+                restSpeedThreshold: 0.2,
+                restDisplacementThreshold: 0.2,
+              }}
+              panGestureHandlerProps={{
+                enabled: isTaskReorderMode,
+                minDist: isTaskReorderMode ? 3 : 999,
+                activeOffsetX: isTaskReorderMode ? [-20, 20] : undefined,
+                activeOffsetY: isTaskReorderMode ? [-5, 5] : undefined,
+                failOffsetX: isTaskReorderMode ? undefined : [-10, 10],
+                failOffsetY: isTaskReorderMode ? undefined : [-10, 10],
+              }}
               style={{ flex: 1 }}
             />
           ) : (
