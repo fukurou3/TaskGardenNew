@@ -194,7 +194,6 @@ export const TaskItem = memo(({
   }, [isSelecting, onLongPressSelect, task.keyId, task.isCompletedInstance, task.id, router]);
 
   const handleLongPress = useCallback(() => {
-    console.log('🔥 TaskItem: Long press detected!', task.keyId);
     onLongPressSelect(task.keyId);
   }, [onLongPressSelect, task.keyId]);
 

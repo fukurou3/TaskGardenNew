@@ -34,7 +34,7 @@ type TaskViewPagerProps = {
   onFolderReorder?: (folderName: string, fromIndex: number, toIndex: number) => void;
   onChangeSortMode?: (sortMode: 'deadline' | 'custom') => void;
   onReorderModeChange?: (isReorderMode: boolean, hasChanges: boolean, onConfirm: () => void, onCancel: () => void) => void;
-  onStartGlobalReorderMode?: () => void;
+  folderOrder?: string[];
 };
 
 const windowWidth = Dimensions.get('window').width;
@@ -65,7 +65,7 @@ export const TaskViewPager: React.FC<TaskViewPagerProps> = ({
   onFolderReorder,
   onChangeSortMode,
   onReorderModeChange,
-  onStartGlobalReorderMode,
+  folderOrder = [],
 }) => {
   // State to control ScrollView scroll enabled
   const [isTaskDragging, setIsTaskDragging] = useState(false);
@@ -79,6 +79,7 @@ export const TaskViewPager: React.FC<TaskViewPagerProps> = ({
   const handleTaskDragStateChange = useCallback((isDragging: boolean) => {
     setIsTaskDragging(isDragging);
   }, []);
+  
   // Simplified page rendering
   const renderPageContent = useMemo(() => (pageFolderName: string, pageIndex: number) => {
     const pageData = memoizedPagesData.get(pageFolderName);
@@ -125,12 +126,11 @@ export const TaskViewPager: React.FC<TaskViewPagerProps> = ({
               isTaskReorderMode,
               onTaskReorder: onTaskReorder ? onTaskReorder(folderName) : undefined,
               onFolderReorder,
-              folderIndex,
-              totalFolders: foldersToRender.length,
+              folderIndex: 0, // シンプル化：インデックスはmoveFolderOrder内で計算
+              totalFolders: 2, // シンプル化：とりあえず固定値
               onTaskDragStateChange: handleTaskDragStateChange,
               onChangeSortMode,
               onReorderModeChange,
-              onStartGlobalReorderMode,
             };
             return <TaskFolder key={`${pageFolderName}-${folderName}-${pageIndex}`} {...taskFolderProps} />;
           })}

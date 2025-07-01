@@ -21,7 +21,6 @@ import { RenameFolderModal } from '@/features/tasks/components/RenameFolderModal
 import { useTasksScreenLogic, type SortMode } from './hooks/useTasksScreenLogic';
 import { FolderTabsBar } from './components/FolderTabsBar';
 import { TaskViewPager } from './components/TaskViewPager';
-import { SelectionBottomBar } from './components/SelectionBottomBar';
 
 export default function TasksScreen() {
   const { colorScheme, subColor } = useAppTheme();
@@ -42,15 +41,6 @@ export default function TasksScreen() {
     onCancel: null,
   });
 
-  // 全フォルダ共通の並べ替えモード開始
-  const handleStartGlobalReorderMode = useCallback(() => {
-    console.log('🌟 Starting global reorder mode for all folders');
-    setTaskReorderState(prev => ({
-      ...prev,
-      isReorderMode: true,
-      hasChanges: false
-    }));
-  }, []);
 
   const logic = useTasksScreenLogic();
   const {
@@ -72,10 +62,11 @@ export default function TasksScreen() {
     router, t,
     toggleTaskDone,
     draggingFolder, setDraggingFolder, moveFolderOrder, stopReordering,
-    onLongPressSelectItem, folderOrder,
+    onLongPressSelectItem, folderOrder, setIsTaskReorderMode,
     renameModalVisible, renameTarget, setRenameModalVisible, setRenameTarget,
     tasks,
   } = logic;
+
 
   const handleSortOptionSelect = (newSortMode: SortMode) => {
     setSortMode(newSortMode);
@@ -97,16 +88,6 @@ export default function TasksScreen() {
     }));
   }, []);
 
-  // グローバル並べ替えモード終了
-  const handleEndGlobalReorderMode = useCallback(() => {
-    console.log('🌟 Ending global reorder mode for all folders');
-    setTaskReorderState({
-      isReorderMode: false,
-      hasChanges: false,
-      onConfirm: null,
-      onCancel: null,
-    });
-  }, []);
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
@@ -183,11 +164,11 @@ export default function TasksScreen() {
           onTaskReorder={logic.createTaskReorderHandler}
           onChangeSortMode={setSortMode}
           onReorderModeChange={handleReorderModeChange}
-          onStartGlobalReorderMode={handleStartGlobalReorderMode}
+          folderOrder={folderOrder}
         />
       )}
 
-      {!isSelecting && !isReordering && !taskReorderState.isReorderMode && (
+      {!isReordering && !taskReorderState.isReorderMode && (
         <TouchableOpacity
           style={[styles.fab, { bottom: Platform.OS === 'ios' ? 16 : 16 }]}
           onPress={() => router.push('/add/')}
@@ -196,22 +177,6 @@ export default function TasksScreen() {
         </TouchableOpacity>
       )}
 
-      <SelectionBottomBar
-        styles={styles}
-        isSelecting={isSelecting}
-        selectionAnimSharedValue={selectionAnim}
-        selectedItems={selectedItems}
-        subColor={subColor}
-        noFolderName={noFolderName}
-        folderOrder={folderOrder}
-        selectedFolderTabName={logic.selectedFolderTabName}
-        onSelectAll={handleSelectAll}
-        onDeleteSelected={handleDeleteSelected}
-        onRenameSelected={openRenameModalForSelectedFolder}
-        onReorderSelected={handleReorderSelectedFolder}
-        onCancelSelection={cancelSelectionMode}
-        t={t}
-      />
 
       {/* Task Reorder Mode Buttons - 画面下部中央に独立配置 */}
       {taskReorderState.isReorderMode && (
@@ -243,7 +208,6 @@ export default function TasksScreen() {
             }}
             onPress={() => {
               taskReorderState.onCancel?.();
-              handleEndGlobalReorderMode();
             }}
           >
             <Ionicons name="close" size={20} color={isDark ? '#FFFFFF' : '#000000'} />
@@ -274,7 +238,6 @@ export default function TasksScreen() {
             }}
             onPress={() => {
               taskReorderState.onConfirm?.();
-              handleEndGlobalReorderMode();
             }}
             disabled={!taskReorderState.hasChanges}
           >

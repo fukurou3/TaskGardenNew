@@ -43,6 +43,9 @@ export default function DraggableTestScreen() {
   // Shared values for UI thread operations - 必要最小限に減らす
   const isDragging = useSharedValue(false);
   const draggedTaskId = useSharedValue<string | null>(null);
+  
+  // スクロール制御用の状態
+  const [isDragActive, setIsDragActive] = useState(false);
 
   // Load real tasks from database (using same method as useTasksScreenLogic)
   const loadTasks = useCallback(async () => {
@@ -82,7 +85,6 @@ export default function DraggableTestScreen() {
           });
         
         setTasks(displayableTasks);
-        console.log(`Loaded ${displayableTasks.length} tasks for ${currentTab} tab`);
       }
     } catch (error) {
       console.error('Failed to load tasks:', error);
@@ -95,6 +97,7 @@ export default function DraggableTestScreen() {
   useEffect(() => {
     loadTasks();
   }, [loadTasks]);
+
 
   // Real task operations
   const handleToggleTaskDone = useCallback(async (id: string, instanceDate?: string) => {
@@ -116,8 +119,6 @@ export default function DraggableTestScreen() {
   // シンプルな並び替え処理 - DraggableFlatListの標準動作に任せる
   const handleDragEnd = useCallback((data: DisplayableTaskItem[], from: number, to: number) => {
     if (from === to) return;
-    
-    console.log('🔄 並び替え実行:', from, '->', to);
     
     // シンプルに新しい順序で更新
     setPendingTasks(data);
@@ -145,7 +146,7 @@ export default function DraggableTestScreen() {
           }
         }
       } catch (dbError) {
-        console.log('Task reorder in DB not supported, keeping local order');
+        // Task reorder in DB not supported, keeping local order
       }
     } catch (error) {
       console.error('Failed to confirm reorder:', error);
@@ -165,23 +166,18 @@ export default function DraggableTestScreen() {
   }, []);
 
   const handleLongPressSelect = useCallback((id: string) => {
-    console.log('🔥 handleLongPressSelect called with ID:', id);
-    console.log('Current state - isReorderMode:', isReorderMode, 'isSelecting:', isSelecting);
-    
     if (isReorderMode) {
-      console.log('Already in reorder mode, doing nothing');
       return;
     }
     
     if (isSelecting) {
-      console.log('In selecting mode, toggling selection');
       setSelectedIds(prev => 
         prev.includes(id) 
           ? prev.filter(selectedId => selectedId !== id)
           : [...prev, id]
       );
     } else {
-      console.log('🎉 ENTERING REORDER MODE!');
+      // 並び替えモードに切り替え
       setIsReorderMode(true);
       setPendingTasks([...tasks]);
       setHasChanges(false);
@@ -299,116 +295,95 @@ export default function DraggableTestScreen() {
     },
   });
 
-  // Custom task wrapper component
-  const CustomTaskWrapper = ({ item, drag, isActive }: any) => {
-    const longPressTimer = useRef<NodeJS.Timeout | null>(null);
-    const [isPressed, setIsPressed] = useState(false);
-    
-    // Cleanup timer on unmount
-    useEffect(() => {
-      return () => {
-        if (longPressTimer.current) {
-          clearTimeout(longPressTimer.current);
-        }
-      };
-    }, []);
-    
-    const handlePressIn = useCallback(() => {
-      console.log('Press in detected for task:', item.title);
-      if (isReorderMode) {
-        console.log('In reorder mode, ignoring press in');
-        return;
-      }
-      
-      setIsPressed(true);
-      longPressTimer.current = setTimeout(() => {
-        console.log('🔥 LONG PRESS DETECTED! Task:', item.title);
-        console.log('Calling handleLongPressSelect with:', item.keyId);
-        handleLongPressSelect(item.keyId);
-      }, 300); // 300ms long press (faster response)
-    }, [item.keyId, item.title]);
-    
-    const handlePressOut = useCallback(() => {
-      console.log('Press out detected');
-      setIsPressed(false);
-      if (longPressTimer.current) {
-        clearTimeout(longPressTimer.current);
-        longPressTimer.current = null;
-      }
-    }, []);
-    
-    const handlePress = useCallback(() => {
-      console.log('Press detected for task:', item.title);
-      if (isReorderMode) {
-        console.log('In reorder mode, ignoring press');
-        return;
-      }
-      
-      // Clear any pending long press
-      if (longPressTimer.current) {
-        clearTimeout(longPressTimer.current);
-        longPressTimer.current = null;
-      }
-      
-      // Handle normal press
-      if (isSelecting) {
-        handleLongPressSelect(item.keyId);
-      } else {
-        router.push(`/task-detail/${item.id}`);
-      }
-    }, [item.keyId, item.id]);
+  // Custom task wrapper component - シンプルな実装
+  const CustomTaskWrapper = useCallback(({ item, drag, isActive }: any) => {
     
     return (
       <Pressable
-        onPressIn={handlePressIn}
-        onPressOut={handlePressOut}
-        onPress={handlePress}
+        onLongPress={() => {
+          if (!isReorderMode) {
+            handleLongPressSelect(item.keyId);
+          }
+        }}
+        onPress={() => {
+          if (isReorderMode) {
+            return;
+          }
+          if (isSelecting) {
+            handleLongPressSelect(item.keyId);
+          } else {
+            router.push(`/task-detail/${item.id}`);
+          }
+        }}
+        delayLongPress={500}
+        disabled={isReorderMode} // 並び替えモード時はPressableを無効化
         style={({ pressed }) => [{
           flexDirection: 'row',
           alignItems: 'center',
           backgroundColor: isReorderMode 
             ? (isDark ? '#1C1C1E' : '#F2F2F7') 
-            : (pressed || isPressed) 
+            : pressed 
               ? (isDark ? '#2C2C2E' : '#F0F0F0')
               : 'transparent',
           paddingRight: isReorderMode ? 16 : 0,
         }]}
       >
         <View style={{ flex: 1 }}>
-          <TaskItem
-            task={item}
-            onToggle={isReorderMode ? () => {} : handleToggleTaskDone}
-            isSelecting={isSelecting && !isReorderMode}
-            selectedIds={selectedIds}
-            onLongPressSelect={() => {}} // Disable TaskItem's long press
-            currentTab={currentTab}
-            isDraggable={false} // Always false, we handle dragging separately
-            isActive={isActive}
-          />
+          <View 
+            style={{ 
+              pointerEvents: isReorderMode ? 'none' : 'auto' // リオーダーモード時はタッチイベントを無効化
+            }}
+          >
+            <TaskItem
+              task={item}
+              onToggle={isReorderMode ? () => {} : handleToggleTaskDone}
+              isSelecting={isSelecting && !isReorderMode}
+              selectedIds={selectedIds}
+              onLongPressSelect={(type, id) => {
+                if (!isReorderMode && !isSelecting) {
+                  handleLongPressSelect(id);
+                }
+              }}
+              currentTab={currentTab}
+              isDraggable={false} // Always false, we handle dragging separately
+              isActive={isActive}
+            />
+          </View>
         </View>
         
-        {/* Drag handle (visible only in reorder mode) */}
+        {/* つまみ（3つの点）- 右側に配置、リオーダーモード時のみ表示 */}
         {isReorderMode && (
           <TouchableOpacity
-            onPressIn={drag}
+            onLongPress={drag}
+            delayLongPress={100}
             style={{
-              padding: 16,
+              paddingVertical: 16,
+              paddingHorizontal: 16,
               justifyContent: 'center',
               alignItems: 'center',
+              backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+              borderRadius: 8,
+              marginRight: 8,
+              marginLeft: 8,
+              minWidth: 44,
+              minHeight: 44,
             }}
+            activeOpacity={0.7}
           >
             <View style={{
               flexDirection: 'column',
-              gap: 2,
+              alignItems: 'center',
+              gap: 3,
             }}>
-              {Array.from({ length: 6 }, (_, i) => (
+              {Array.from({ length: 3 }, (_, i) => (
                 <View
                   key={i}
                   style={{
-                    width: 3,
-                    height: 3,
+                    width: 4,
+                    height: 4,
                     backgroundColor: isDark ? '#8E8E93' : '#C7C7CC',
-                    borderRadius: 1.5,
+                    borderRadius: 2,
+                    opacity: 0.8,
                   }}
                 />
               ))}
@@ -417,7 +392,7 @@ export default function DraggableTestScreen() {
         )}
       </Pressable>
     );
-  };
+  }, [isReorderMode, isSelecting, isDark, handleLongPressSelect, router]); // 依存関係を追加
   
   // Render draggable task item
   const renderItem = useCallback(({ item, drag, isActive }: any) => {
@@ -426,7 +401,7 @@ export default function DraggableTestScreen() {
         <CustomTaskWrapper item={item} drag={drag} isActive={isActive} />
       </ScaleDecorator>
     );
-  }, [CustomTaskWrapper]);
+  }, [isReorderMode]);
 
   return (
     <SafeAreaView style={screenStyles.container}>
@@ -495,52 +470,8 @@ export default function DraggableTestScreen() {
           </View>
         ) : (
           <>
-            {/* Debug info */}
-            <View style={{ padding: 16, backgroundColor: isDark ? '#2C2C2E' : '#F2F2F7' }}>
-              <Text style={{ color: isDark ? '#FFFFFF' : '#000000', fontSize: 12, fontWeight: 'bold' }}>
-                Debug Info:
-              </Text>
-              <Text style={{ color: isDark ? '#FFFFFF' : '#000000', fontSize: 11 }}>
-                • Tasks: {tasks.length} for {currentTab} tab
-              </Text>
-              <Text style={{ color: isDark ? '#FFFFFF' : '#000000', fontSize: 11 }}>
-                • Reorder Mode: {isReorderMode ? 'ON' : 'OFF'}
-              </Text>
-              <Text style={{ color: isDark ? '#FFFFFF' : '#000000', fontSize: 11 }}>
-                • Selecting: {isSelecting ? 'ON' : 'OFF'}
-              </Text>
-              <Text style={{ color: isDark ? '#FFFFFF' : '#000000', fontSize: 11 }}>
-                • Has Changes: {hasChanges ? 'YES' : 'NO'}
-              </Text>
-              <Text style={{ color: isDark ? '#FF9500' : '#FF8C00', fontSize: 10 }}>
-                • 保留タスク数: {isReorderMode ? pendingTasks.length : 'N/A'}
-              </Text>
-              <Text style={{ color: isDark ? '#FF9500' : '#FF8C00', fontSize: 10, marginTop: 4 }}>
-                👆 Long press any task to enter reorder mode
-              </Text>
-              
-              {/* Manual test button */}
-              <TouchableOpacity
-                style={{
-                  backgroundColor: subColor,
-                  padding: 8,
-                  borderRadius: 6,
-                  marginTop: 8,
-                  alignItems: 'center',
-                }}
-                onPress={() => {
-                  console.log('Manual test button pressed');
-                  if (tasks.length > 0) {
-                    handleLongPressSelect(tasks[0].keyId);
-                  }
-                }}
-              >
-                <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '600' }}>
-                  📝 Manual Test: Enter Reorder Mode
-                </Text>
-              </TouchableOpacity>
-            </View>
             <DraggableFlatList
+              key={`draggable-${isReorderMode ? 'reorder' : 'normal'}-${currentTab}`} // 動的key
               data={isReorderMode ? pendingTasks : tasks}
               renderItem={renderItem}
               keyExtractor={(item) => item.keyId}
@@ -548,21 +479,31 @@ export default function DraggableTestScreen() {
                 if (isReorderMode) {
                   isDragging.value = true;
                   draggedTaskId.value = pendingTasks[from]?.keyId || null;
-                  console.log('📌 Drag 開始:', from, 'タスクID:', draggedTaskId.value);
+                  setIsDragActive(true); // ドラッグ開始時にスクロール制御
                 }
               }}
               onDragEnd={({ data, from, to }) => {
                 if (isReorderMode && from !== to) {
-                  console.log('📌 Drag 終了:', from, '->', to);
                   handleDragEnd(data, from, to);
                 }
                 // ドラッグ終了時のクリーンアップ
                 isDragging.value = false;
                 draggedTaskId.value = null;
+                setIsDragActive(false); // ドラッグ終了時にスクロール制御解除
               }}
-              activationDistance={isReorderMode ? 0 : 999}
+              activationDistance={isReorderMode ? 0 : 99999}
               dragItemOverflow={false}
-              simultaneousHandlers={!isReorderMode ? [] : undefined}
+              simultaneousHandlers={[]}
+              scrollEnabled={true}
+              panGestureHandlerProps={{
+                // 並び替えモード時のみPanGestureを有効化
+                enabled: isReorderMode,
+                minDist: isReorderMode ? 5 : 999,
+                activeOffsetX: isReorderMode ? [-10, 10] : undefined,
+                activeOffsetY: isReorderMode ? [-10, 10] : undefined,
+                failOffsetX: isReorderMode ? undefined : [-5, 5],
+                failOffsetY: isReorderMode ? undefined : [-5, 5],
+              }}
             />
           </>
         )}

@@ -43,7 +43,6 @@ export interface Props {
   onTaskDragStateChange?: (isDragging: boolean) => void;
   onChangeSortMode?: (sortMode: 'deadline' | 'custom') => void;
   onReorderModeChange?: (isReorderMode: boolean, hasChanges: boolean, onConfirm: () => void, onCancel: () => void) => void;
-  onStartGlobalReorderMode?: () => void;
 }
 
 export const TaskFolder: React.FC<Props> = ({
@@ -71,7 +70,6 @@ export const TaskFolder: React.FC<Props> = ({
   onTaskDragStateChange,
   onChangeSortMode,
   onReorderModeChange,
-  onStartGlobalReorderMode,
 }) => {
   const { colorScheme, subColor } = useAppTheme();
   const isDark = colorScheme === 'dark';
@@ -89,9 +87,6 @@ export const TaskFolder: React.FC<Props> = ({
   const [pendingTasks, setPendingTasks] = useState<DisplayableTaskItem[]>([]);
   const [hasChanges, setHasChanges] = useState(false);
   
-  // 最新の値を確実に取得するためのref
-  const sortModeRef = useRef(sortMode);
-  sortModeRef.current = sortMode;
   
   // 並べ替えモードの条件
   const isDraggableMode = sortMode === 'custom' && currentTab === 'incomplete' && !isSelecting && (tasks?.length || 0) > 1;
@@ -125,22 +120,11 @@ export const TaskFolder: React.FC<Props> = ({
   
   // Remove excessive debug logging
   
-  const isFolderDraggable = sortMode === 'custom' && currentTab === 'incomplete' && !isSelecting && totalFolders > 1 && folderName !== noFolderName && isTaskReorderMode;
+  
 
 
   // handleToggleReorderMode削除
 
-  const handleFolderReorderUp = () => {
-    if (folderIndex > 0 && onFolderReorder) {
-      onFolderReorder(folderName, folderIndex, folderIndex - 1);
-    }
-  };
-
-  const handleFolderReorderDown = () => {
-    if (folderIndex < totalFolders - 1 && onFolderReorder) {
-      onFolderReorder(folderName, folderIndex, folderIndex + 1);
-    }
-  };
 
 
   const handlePressFolder = () => {
@@ -264,27 +248,6 @@ export const TaskFolder: React.FC<Props> = ({
     );
   }, [isTaskReorderMode, onToggleTaskDone, currentTab, isDark]);
   
-  // 長押しハンドラーを分離
-  const handleTaskLongPress = useCallback((id: string) => {
-    const currentSortMode = sortModeRef.current;
-    console.log('📱 TaskFolder: Long press received from TaskItem', {
-      id,
-      sortMode: currentSortMode,
-      sortModeFromProp: sortMode,
-      currentTab,
-      isSelecting,
-      tasksLength: tasks?.length || 0
-    });
-    
-    // カスタム順の時のみ並べ替えモード開始を許可（すべてのフォルダで）
-    if (currentSortMode === 'custom' && currentTab === 'incomplete' && !isSelecting) {
-      console.log('🚀 Starting global reorder mode for all folders!');
-      onStartGlobalReorderMode?.();
-    } else {
-      console.log('💡 Regular long press handling');
-      onLongPressSelect('task', id);
-    }
-  }, [currentTab, isSelecting, onStartGlobalReorderMode, onLongPressSelect]);
 
   // 通常TaskItem
   const renderRegularTaskItem = useCallback(({ item, index }: { item: DisplayableTaskItem, index: number }) => {
@@ -295,14 +258,14 @@ export const TaskFolder: React.FC<Props> = ({
         onToggle={onToggleTaskDone}
         isSelecting={isSelecting}
         selectedIds={selectedIds}
-        onLongPressSelect={handleTaskLongPress}
+        onLongPressSelect={() => {}}
         currentTab={currentTab}
         isInsideFolder={true}
         isLastItem={index === tasks.length - 1}
         isDraggable={false}
       />
     );
-  }, [tasks.length, onToggleTaskDone, isSelecting, selectedIds, handleTaskLongPress, currentTab]);
+  }, [tasks.length, onToggleTaskDone, isSelecting, selectedIds, currentTab]);
 
   // Mock animations since Reanimated is disabled
   const animatedFolderHeaderStyle = {
@@ -347,50 +310,8 @@ export const TaskFolder: React.FC<Props> = ({
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             {/* ドットメニューボタン - 無効化 */}
             
-            {/* フォルダの並べ替えボタン（カスタムモード時） */}
-            {isFolderDraggable && (
-              <View style={styles.reorderButtonsContainer}>
-                <TouchableOpacity 
-                  style={[styles.reorderButton, folderIndex === 0 && styles.reorderButtonDisabled]}
-                  onPress={handleFolderReorderUp}
-                  disabled={folderIndex === 0}
-                >
-                  <Ionicons 
-                    name="chevron-up" 
-                    size={16} 
-                    color={folderIndex === 0 ? (isDark ? '#5A5A5A' : '#C7C7CC') : subColor} 
-                  />
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  style={[styles.reorderButton, folderIndex >= totalFolders - 1 && styles.reorderButtonDisabled]}
-                  onPress={handleFolderReorderDown}
-                  disabled={folderIndex >= totalFolders - 1}
-                >
-                  <Ionicons 
-                    name="chevron-down" 
-                    size={16} 
-                    color={folderIndex >= totalFolders - 1 ? (isDark ? '#5A5A5A' : '#C7C7CC') : subColor} 
-                  />
-                </TouchableOpacity>
-              </View>
-            )}
+
             
-            {/* 既存の並べ替えボタン（編集モード時） */}
-            {isReordering && draggingFolder !== folderName && folderName !== noFolderName && (
-              <>
-                <TouchableOpacity onPress={() => moveFolder(folderName, 'up')} style={styles.reorderButton}>
-                  <Ionicons name="arrow-up" size={20} color={subColor} />
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => moveFolder(folderName, 'down')} style={styles.reorderButton}>
-                  <Ionicons name="arrow-down" size={20} color={subColor} />
-                </TouchableOpacity>
-              </>
-            )}
-             {isReordering && draggingFolder === folderName && folderName !== noFolderName && (
-                <TouchableOpacity onPress={stopReordering} style={styles.reorderButton}>
-                  <Text style={{color: subColor}}>{t('common.done')}</Text>
-                </TouchableOpacity>
-            )}
           </View>
         </TouchableOpacity>
         </View>

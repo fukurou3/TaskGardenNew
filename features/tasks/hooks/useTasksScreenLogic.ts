@@ -329,23 +329,8 @@ export const useTasksScreenLogic = () => {
   }, [folderOrder]);
 
   const onLongPressSelectItem = useCallback((type: 'task' | 'folder', id: string) => {
-    // If long-pressing a task and not in custom sort mode, automatically switch to custom sort and task reorder mode
-    if (type === 'task' && sortMode !== 'custom' && activeTab === 'incomplete') {
-      setSortMode('custom');
-      setIsTaskReorderMode(true);
-      return;
-    }
-    
-    // If already in custom sort mode and long-pressing a task, enable task reorder mode
-    if (type === 'task' && sortMode === 'custom' && activeTab === 'incomplete' && !isTaskReorderMode) {
-      setIsTaskReorderMode(true);
-      return;
-    }
-    
-    // Default behavior for folder selection or when already in selection mode
-    selectionHook.startSelecting();
-    selectionHook.toggleItem({ id, type });
-  }, [selectionHook, sortMode, activeTab, isTaskReorderMode, setSortMode, setIsTaskReorderMode]);
+    // 長押し処理を無効化
+  }, []);
 
   const cancelSelectionMode = useCallback(() => {
     selectionHook.clearSelection();
@@ -1073,7 +1058,7 @@ export const useTasksScreenLogic = () => {
     setIsReordering, setDraggingFolder, setRenameModalVisible, setRenameTarget,
     setFolderTabLayouts,
     toggleTaskDone,
-    moveFolderOrder, stopReordering, toggleTaskReorderMode,
+    moveFolderOrder, stopReordering, toggleTaskReorderMode, setIsTaskReorderMode,
     onLongPressSelectItem, cancelSelectionMode,
     handleFolderTabPress, handlePageSelected, handlePageScroll,
     handleSelectAll, handleDeleteSelected, confirmDelete,
