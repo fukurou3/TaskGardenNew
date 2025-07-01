@@ -32,6 +32,9 @@ type TaskViewPagerProps = {
   isTaskReorderMode?: boolean;
   onTaskReorder?: (folderName: string) => (fromIndex: number, toIndex: number) => Promise<void>;
   onFolderReorder?: (folderName: string, fromIndex: number, toIndex: number) => void;
+  onChangeSortMode?: (sortMode: 'deadline' | 'custom') => void;
+  onReorderModeChange?: (isReorderMode: boolean, hasChanges: boolean, onConfirm: () => void, onCancel: () => void) => void;
+  onStartGlobalReorderMode?: () => void;
 };
 
 const windowWidth = Dimensions.get('window').width;
@@ -60,6 +63,9 @@ export const TaskViewPager: React.FC<TaskViewPagerProps> = ({
   isTaskReorderMode = false,
   onTaskReorder,
   onFolderReorder,
+  onChangeSortMode,
+  onReorderModeChange,
+  onStartGlobalReorderMode,
 }) => {
   // State to control ScrollView scroll enabled
   const [isTaskDragging, setIsTaskDragging] = useState(false);
@@ -71,7 +77,6 @@ export const TaskViewPager: React.FC<TaskViewPagerProps> = ({
   
   // Callback to handle task drag state changes
   const handleTaskDragStateChange = useCallback((isDragging: boolean) => {
-    console.log('📜 ScrollView control - Task dragging state changed:', isDragging);
     setIsTaskDragging(isDragging);
   }, []);
   // Simplified page rendering
@@ -96,7 +101,7 @@ export const TaskViewPager: React.FC<TaskViewPagerProps> = ({
         bouncesZoom={false}
         decelerationRate={0.998}
         snapToAlignment="start"
-        scrollEnabled={!isTaskDragging && !isInDraggableMode} // Disable scroll when task is being dragged or in draggable mode
+        scrollEnabled={!isTaskDragging} // 実際にドラッグ中のみスクロール無効、並べ替えモード自体では有効
       >
           {foldersToRender.map((folderName, folderIndex) => {
             const sortedFolderTasks = tasksByFolder.get(folderName) || [];
@@ -122,7 +127,10 @@ export const TaskViewPager: React.FC<TaskViewPagerProps> = ({
               onFolderReorder,
               folderIndex,
               totalFolders: foldersToRender.length,
-              onTaskDragStateChange: handleTaskDragStateChange, // Add callback for ScrollView control
+              onTaskDragStateChange: handleTaskDragStateChange,
+              onChangeSortMode,
+              onReorderModeChange,
+              onStartGlobalReorderMode,
             };
             return <TaskFolder key={`${pageFolderName}-${folderName}-${pageIndex}`} {...taskFolderProps} />;
           })}

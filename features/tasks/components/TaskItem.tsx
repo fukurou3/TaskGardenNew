@@ -9,7 +9,6 @@ import relativeTime from 'dayjs/plugin/relativeTime';
 import { useRouter } from 'expo-router';
 
 import { DisplayableTaskItem } from '../types';
-import { DRAG_CONFIG } from '@/components/SkiaTaskCanvas/constants';
 import { createStyles } from '../styles';
 import { useAppTheme } from '@/hooks/ThemeContext';
 import { useTranslation } from 'react-i18next';
@@ -57,7 +56,7 @@ const TaskDeadline = memo(({ task, isDark, fontSizeKey, currentTab }: TaskDeadli
   // 軽量化：完了判定を単純化
   const isCurrentDisplayInstanceDone = useMemo(() => {
     if (task.isCompletedInstance || currentTab === 'completed') return true;
-    if (task.deadlineDetails?.repeatFrequency && effectiveDueDateUtc) {
+    if (task.deadlineDetails?.repeatFrequency && effectiveDueDateUtc && effectiveDueDateUtc.format) {
       const instanceDateStr = effectiveDueDateUtc.format('YYYY-MM-DD');
       return task.completedInstanceDates?.includes(instanceDateStr) ?? false;
     }
@@ -172,7 +171,7 @@ export const TaskItem = memo(({
   
   const isCurrentDisplayInstanceDone = useMemo(() => {
     if (task.isCompletedInstance || currentTab === 'completed') return true;
-    if (task.deadlineDetails?.repeatFrequency && effectiveDueDateUtc) {
+    if (task.deadlineDetails?.repeatFrequency && effectiveDueDateUtc && effectiveDueDateUtc.format) {
       const instanceDateStr = effectiveDueDateUtc.format('YYYY-MM-DD');
       return task.completedInstanceDates?.includes(instanceDateStr) ?? false;
     }
@@ -195,10 +194,9 @@ export const TaskItem = memo(({
   }, [isSelecting, onLongPressSelect, task.keyId, task.isCompletedInstance, task.id, router]);
 
   const handleLongPress = useCallback(() => {
-    if (isSelecting) {
-      onLongPressSelect(task.keyId);
-    }
-  }, [isSelecting, onLongPressSelect, task.keyId]);
+    console.log('🔥 TaskItem: Long press detected!', task.keyId);
+    onLongPressSelect(task.keyId);
+  }, [onLongPressSelect, task.keyId]);
 
   const itemContainerStyle = useMemo(() => [
     styles.taskItemContainer,
@@ -244,7 +242,7 @@ export const TaskItem = memo(({
       <TouchableOpacity
         onPress={handlePress}
         onLongPress={drag} // Use the library's drag function directly
-        delayLongPress={DRAG_CONFIG.LONG_PRESS_DURATION} // Unified timing from constants
+        delayLongPress={500} // Standard long press duration
         style={itemContainerStyle}
         activeOpacity={0.7}
       >
@@ -258,7 +256,7 @@ export const TaskItem = memo(({
     <TouchableOpacity
       onPress={handlePress}
       onLongPress={handleLongPress}
-      delayLongPress={DRAG_CONFIG.LONG_PRESS_DURATION}
+      delayLongPress={500}
       style={itemContainerStyle}
       activeOpacity={0.7}
     >

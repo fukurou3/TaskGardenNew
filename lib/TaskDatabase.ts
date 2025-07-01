@@ -36,6 +36,10 @@ const TasksDatabase = {
       await database.execAsync(
         'CREATE TABLE IF NOT EXISTS tasks (id TEXT PRIMARY KEY NOT NULL, data TEXT NOT NULL);'
       );
+      // カスタム順保存用のテーブルを作成
+      await database.execAsync(
+        'CREATE TABLE IF NOT EXISTS task_custom_orders (folder TEXT NOT NULL, task_id TEXT NOT NULL, custom_order INTEGER NOT NULL, PRIMARY KEY (folder, task_id));'
+      );
     });
   },
 
@@ -64,6 +68,43 @@ const TasksDatabase = {
     return executeWithQueue(async () => {
       const database = await getDb();
       await database.runAsync('DELETE FROM tasks WHERE id = ?;', [id]);
+      // カスタム順も削除
+      await database.runAsync('DELETE FROM task_custom_orders WHERE task_id = ?;', [id]);
+    });
+  },
+
+  // カスタム順保存機能
+  async updateTaskOrder(taskId: string, customOrder: number, folder: string = 'all') {
+    return executeWithQueue(async () => {
+      const database = await getDb();
+      await database.runAsync(
+        'REPLACE INTO task_custom_orders (folder, task_id, custom_order) VALUES (?, ?, ?);',
+        [folder, taskId, customOrder]
+      );
+    });
+  },
+
+  // フォルダのカスタム順を取得
+  async getCustomOrders(folder: string = 'all'): Promise<{ [taskId: string]: number }> {
+    return executeWithQueue(async () => {
+      const database = await getDb();
+      const rows = await database.getAllAsync<{ task_id: string; custom_order: number }>(
+        'SELECT task_id, custom_order FROM task_custom_orders WHERE folder = ?;',
+        [folder]
+      );
+      const orders: { [taskId: string]: number } = {};
+      rows.forEach(row => {
+        orders[row.task_id] = row.custom_order;
+      });
+      return orders;
+    });
+  },
+
+  // フォルダ削除時のクリーンアップ
+  async cleanupCustomOrdersForFolder(folder: string) {
+    return executeWithQueue(async () => {
+      const database = await getDb();
+      await database.runAsync('DELETE FROM task_custom_orders WHERE folder = ?;', [folder]);
     });
   },
 };

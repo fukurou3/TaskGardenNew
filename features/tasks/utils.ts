@@ -167,7 +167,7 @@ export const getTimeText = (
 ): string => {
   const nowLocal = dayjs();
 
-  if ((task.deadlineDetails as any)?.isPeriodSettingEnabled && displayStartDateUtc && displayStartDateUtc.local().isAfter(nowLocal)) {
+  if ((task.deadlineDetails as any)?.isPeriodSettingEnabled && displayStartDateUtc && displayStartDateUtc.local && displayStartDateUtc.local().isAfter(nowLocal)) {
     const displayStartDateLocal = displayStartDateUtc.local();
     const diffMinutes = displayStartDateLocal.diff(nowLocal, 'minute');
     if (diffMinutes < 1) return t('time.startsInMinutes', { count: 1 });
@@ -178,7 +178,7 @@ export const getTimeText = (
     return t('time.startsOnDate', { date: displayStartDateLocal.locale(i18n.language).format(t('common.month_day_format', 'M月D日')) });
   }
 
-  if (!effectiveDueDateUtc) {
+  if (!effectiveDueDateUtc || !effectiveDueDateUtc.local) {
     return t('task_list.no_deadline', '期限なし');
   }
   const effectiveDueDateLocal = effectiveDueDateUtc.local();
@@ -277,7 +277,7 @@ export const getTimeColor = (
 ): string => {
   const nowLocal = dayjs();
 
-  if (!effectiveDueDateUtc) {
+  if (!effectiveDueDateUtc || !effectiveDueDateUtc.local) {
     return isDark ? '#8E8E93' : '#6D6D72';
   }
 

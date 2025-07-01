@@ -1,5 +1,5 @@
 // app/features/tasks/TasksScreen.tsx
-import React, { useContext } from 'react';
+import React, { useContext, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -28,6 +28,29 @@ export default function TasksScreen() {
   const isDark = colorScheme === 'dark';
   const { fontSizeKey } = useContext(FontSizeContext);
   const styles = createStyles(isDark, subColor, fontSizeKey);
+  
+  // 並べ替えモード用の状態
+  const [taskReorderState, setTaskReorderState] = useState<{
+    isReorderMode: boolean;
+    hasChanges: boolean;
+    onConfirm: (() => void) | null;
+    onCancel: (() => void) | null;
+  }>({
+    isReorderMode: false,
+    hasChanges: false,
+    onConfirm: null,
+    onCancel: null,
+  });
+
+  // 全フォルダ共通の並べ替えモード開始
+  const handleStartGlobalReorderMode = useCallback(() => {
+    console.log('🌟 Starting global reorder mode for all folders');
+    setTaskReorderState(prev => ({
+      ...prev,
+      isReorderMode: true,
+      hasChanges: false
+    }));
+  }, []);
 
   const logic = useTasksScreenLogic();
   const {
@@ -58,6 +81,32 @@ export default function TasksScreen() {
     setSortMode(newSortMode);
     setSortModalVisible(false);
   };
+  
+  // 並べ替えモード状態変更ハンドラー
+  const handleReorderModeChange = useCallback((
+    isReorderMode: boolean, 
+    hasChanges: boolean, 
+    onConfirm: () => void, 
+    onCancel: () => void
+  ) => {
+    setTaskReorderState(prev => ({
+      ...prev,
+      hasChanges,
+      onConfirm,
+      onCancel,
+    }));
+  }, []);
+
+  // グローバル並べ替えモード終了
+  const handleEndGlobalReorderMode = useCallback(() => {
+    console.log('🌟 Ending global reorder mode for all folders');
+    setTaskReorderState({
+      isReorderMode: false,
+      hasChanges: false,
+      onConfirm: null,
+      onCancel: null,
+    });
+  }, []);
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
@@ -130,12 +179,15 @@ export default function TasksScreen() {
           t={t}
           memoizedPagesData={memoizedPagesData}
           sortMode={sortMode}
-          isTaskReorderMode={false}
+          isTaskReorderMode={taskReorderState.isReorderMode}
           onTaskReorder={logic.createTaskReorderHandler}
+          onChangeSortMode={setSortMode}
+          onReorderModeChange={handleReorderModeChange}
+          onStartGlobalReorderMode={handleStartGlobalReorderMode}
         />
       )}
 
-      {!isSelecting && !isReordering && (
+      {!isSelecting && !isReordering && !taskReorderState.isReorderMode && (
         <TouchableOpacity
           style={[styles.fab, { bottom: Platform.OS === 'ios' ? 16 : 16 }]}
           onPress={() => router.push('/add/')}
@@ -160,6 +212,87 @@ export default function TasksScreen() {
         onCancelSelection={cancelSelectionMode}
         t={t}
       />
+
+      {/* Task Reorder Mode Buttons - 画面下部中央に独立配置 */}
+      {taskReorderState.isReorderMode && (
+        <View style={{
+          position: 'absolute',
+          bottom: Platform.OS === 'ios' ? 34 : 16, // iOSのHome Indicator考慮
+          left: 0,
+          right: 0,
+          flexDirection: 'row',
+          justifyContent: 'center',
+          alignItems: 'center',
+          paddingHorizontal: 20,
+          gap: 16,
+        }}>
+          <TouchableOpacity 
+            style={{
+              backgroundColor: isDark ? '#48484A' : '#E5E5EA',
+              paddingVertical: 12,
+              paddingHorizontal: 24,
+              borderRadius: 25,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 8,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.1,
+              shadowRadius: 4,
+              elevation: 4,
+            }}
+            onPress={() => {
+              taskReorderState.onCancel?.();
+              handleEndGlobalReorderMode();
+            }}
+          >
+            <Ionicons name="close" size={20} color={isDark ? '#FFFFFF' : '#000000'} />
+            <Text style={{ 
+              color: isDark ? '#FFFFFF' : '#000000', 
+              fontWeight: '600',
+              fontSize: 16,
+            }}>
+              キャンセル
+            </Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={{
+              backgroundColor: taskReorderState.hasChanges ? subColor : (isDark ? '#48484A' : '#E5E5EA'),
+              paddingVertical: 12,
+              paddingHorizontal: 24,
+              borderRadius: 25,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 8,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.1,
+              shadowRadius: 4,
+              elevation: 4,
+              opacity: taskReorderState.hasChanges ? 1 : 0.6,
+            }}
+            onPress={() => {
+              taskReorderState.onConfirm?.();
+              handleEndGlobalReorderMode();
+            }}
+            disabled={!taskReorderState.hasChanges}
+          >
+            <Ionicons 
+              name="checkmark" 
+              size={20} 
+              color={taskReorderState.hasChanges ? '#FFFFFF' : (isDark ? '#8E8E93' : '#C7C7CC')} 
+            />
+            <Text style={{ 
+              color: taskReorderState.hasChanges ? '#FFFFFF' : (isDark ? '#8E8E93' : '#C7C7CC'),
+              fontWeight: '600',
+              fontSize: 16,
+            }}>
+              完了
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       <RenameFolderModal
         visible={renameModalVisible}

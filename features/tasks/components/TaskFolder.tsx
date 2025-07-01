@@ -1,10 +1,10 @@
 // app/features/tasks/components/TaskFolder.tsx
-import React, { useContext, useState, useCallback, useMemo } from 'react';
+import React, { useContext, useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, FlatList, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import DraggableFlatList, { ScaleDecorator } from 'react-native-draggable-flatlist';
 import { DisplayableTaskItem } from '../types';
 import { TaskItem } from './TaskItem';
-import { SkiaTaskCanvas } from '@/components/SkiaTaskCanvas';
 import { useAppTheme } from '@/hooks/ThemeContext';
 import { useTranslation } from 'react-i18next';
 import { FontSizeContext, FontSizeKey } from '@/context/FontSizeContext';
@@ -41,6 +41,9 @@ export interface Props {
   folderIndex?: number;
   totalFolders?: number;
   onTaskDragStateChange?: (isDragging: boolean) => void;
+  onChangeSortMode?: (sortMode: 'deadline' | 'custom') => void;
+  onReorderModeChange?: (isReorderMode: boolean, hasChanges: boolean, onConfirm: () => void, onCancel: () => void) => void;
+  onStartGlobalReorderMode?: () => void;
 }
 
 export const TaskFolder: React.FC<Props> = ({
@@ -66,6 +69,9 @@ export const TaskFolder: React.FC<Props> = ({
   folderIndex = 0,
   totalFolders = 1,
   onTaskDragStateChange,
+  onChangeSortMode,
+  onReorderModeChange,
+  onStartGlobalReorderMode,
 }) => {
   const { colorScheme, subColor } = useAppTheme();
   const isDark = colorScheme === 'dark';
@@ -79,8 +85,42 @@ export const TaskFolder: React.FC<Props> = ({
 
   const isFolderSelected = isSelecting && selectedIds.includes(folderName);
   
-  // 🔥 Single Source of Truth: 親のpropsを直接使用（状態管理撤廃）
+  // DraggableFlatList用の状態管理
+  const [pendingTasks, setPendingTasks] = useState<DisplayableTaskItem[]>([]);
+  const [hasChanges, setHasChanges] = useState(false);
+  
+  // 最新の値を確実に取得するためのref
+  const sortModeRef = useRef(sortMode);
+  sortModeRef.current = sortMode;
+  
+  // 並べ替えモードの条件
   const isDraggableMode = sortMode === 'custom' && currentTab === 'incomplete' && !isSelecting && (tasks?.length || 0) > 1;
+  
+  
+  // グローバル並べ替えモード開始時にpendingTasksを初期化
+  useEffect(() => {
+    if (isTaskReorderMode && tasks.length > 0) {
+      setPendingTasks([...tasks]);
+      setHasChanges(false);
+    } else if (!isTaskReorderMode) {
+      setPendingTasks([]);
+      setHasChanges(false);
+    }
+  }, [isTaskReorderMode, tasks]);
+
+  // 並べ替えモード状態を親に通知
+  useEffect(() => {
+    if (onReorderModeChange) {
+      onReorderModeChange(isTaskReorderMode, hasChanges, handleConfirmReorder, handleCancelReorder);
+    }
+  }, [isTaskReorderMode, hasChanges, onReorderModeChange]);
+  
+  // ドラッグ状態を親に通知して外側のScrollViewを制御
+  useEffect(() => {
+    if (onTaskDragStateChange) {
+      onTaskDragStateChange(isTaskReorderMode);
+    }
+  }, [isTaskReorderMode, onTaskDragStateChange]);
   
   
   // Remove excessive debug logging
@@ -115,7 +155,138 @@ export const TaskFolder: React.FC<Props> = ({
 
 
 
-  // フォールバック用の通常TaskItem
+  // 並べ替え処理
+  const handleDragEnd = useCallback((data: DisplayableTaskItem[], from: number, to: number) => {
+    if (from === to) return;
+    console.log('📝 TaskFolder: 並び替え実行:', from, '->', to);
+    setPendingTasks(data);
+    setHasChanges(true);
+  }, []);
+  
+  
+  // 並べ替え確定
+  const handleConfirmReorder = useCallback(async () => {
+    if (!hasChanges) {
+      return;
+    }
+    
+    try {
+      // ソートモードをカスタム順に変更（並び替えを行ったため）
+      if (sortMode !== 'custom') {
+        console.log('📋 ソートモードをカスタム順に変更');
+        onChangeSortMode?.('custom');
+      }
+      
+      // 親に並び替え結果を通知
+      for (let i = 0; i < pendingTasks.length; i++) {
+        if (pendingTasks[i].id !== tasks[i]?.id) {
+          // 並び替えが必要
+          const originalIndex = tasks.findIndex(t => t.id === pendingTasks[i].id);
+          if (originalIndex !== -1 && originalIndex !== i) {
+            await onTaskReorder?.(originalIndex, i);
+            break; // 一度に一つずつ処理
+          }
+        }
+      }
+    } catch (error) {
+      console.error('TaskFolder: 並び替え確定エラー:', error);
+    } finally {
+      setHasChanges(false);
+    }
+  }, [hasChanges, pendingTasks, tasks, onTaskReorder, sortMode, onChangeSortMode]);
+  
+  // 並べ替えキャンセル
+  const handleCancelReorder = useCallback(() => {
+    setPendingTasks([...tasks]);
+    setHasChanges(false);
+  }, [tasks]);
+  
+  // 6つの点でのドラッグ並び替え
+  const renderDraggableTaskItem = useCallback(({ item, drag, isActive }: any) => {
+    return (
+      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        {/* タスク内容部分 - ドラッグ無効、通常タッチ可能 */}
+        <View 
+          style={{ flex: 1 }}
+          pointerEvents="box-none" // 子要素のタッチイベントを通す
+        >
+          <TaskItem
+            task={item}
+            onToggle={onToggleTaskDone}
+            isSelecting={false}
+            selectedIds={[]}
+            onLongPressSelect={() => {}}
+            currentTab={currentTab}
+            isInsideFolder={true}
+            isLastItem={false}
+            isDraggable={false}
+            isActive={false}
+          />
+        </View>
+        
+        {/* 3つの点 - ドラッグハンドル */}
+        {isTaskReorderMode && (
+          <ScaleDecorator>
+            <TouchableOpacity
+              onLongPress={drag}
+              delayLongPress={200}
+              style={{
+                padding: 16,
+                justifyContent: 'center',
+                alignItems: 'center',
+                backgroundColor: 'transparent', // タスク背景と同じ透明背景
+                marginLeft: 8,
+                borderRadius: 8,
+                minWidth: 40,
+              }}
+              activeOpacity={0.8}
+            >
+              <View style={{
+                flexDirection: 'column',
+                gap: 3,
+              }}>
+                {Array.from({ length: 3 }, (_, i) => (
+                  <View
+                    key={i}
+                    style={{
+                      width: 4,
+                      height: 4,
+                      backgroundColor: isDark ? '#8E8E93' : '#C7C7CC',
+                      borderRadius: 2,
+                    }}
+                  />
+                ))}
+              </View>
+            </TouchableOpacity>
+          </ScaleDecorator>
+        )}
+      </View>
+    );
+  }, [isTaskReorderMode, onToggleTaskDone, currentTab, isDark]);
+  
+  // 長押しハンドラーを分離
+  const handleTaskLongPress = useCallback((id: string) => {
+    const currentSortMode = sortModeRef.current;
+    console.log('📱 TaskFolder: Long press received from TaskItem', {
+      id,
+      sortMode: currentSortMode,
+      sortModeFromProp: sortMode,
+      currentTab,
+      isSelecting,
+      tasksLength: tasks?.length || 0
+    });
+    
+    // カスタム順の時のみ並べ替えモード開始を許可（すべてのフォルダで）
+    if (currentSortMode === 'custom' && currentTab === 'incomplete' && !isSelecting) {
+      console.log('🚀 Starting global reorder mode for all folders!');
+      onStartGlobalReorderMode?.();
+    } else {
+      console.log('💡 Regular long press handling');
+      onLongPressSelect('task', id);
+    }
+  }, [currentTab, isSelecting, onStartGlobalReorderMode, onLongPressSelect]);
+
+  // 通常TaskItem
   const renderRegularTaskItem = useCallback(({ item, index }: { item: DisplayableTaskItem, index: number }) => {
     return (
       <TaskItem
@@ -124,14 +295,14 @@ export const TaskFolder: React.FC<Props> = ({
         onToggle={onToggleTaskDone}
         isSelecting={isSelecting}
         selectedIds={selectedIds}
-        onLongPressSelect={(id) => onLongPressSelect('task', id)}
+        onLongPressSelect={handleTaskLongPress}
         currentTab={currentTab}
         isInsideFolder={true}
         isLastItem={index === tasks.length - 1}
         isDraggable={false}
       />
     );
-  }, [tasks.length, onToggleTaskDone, isSelecting, selectedIds, onLongPressSelect, currentTab]);
+  }, [tasks.length, onToggleTaskDone, isSelecting, selectedIds, handleTaskLongPress, currentTab]);
 
   // Mock animations since Reanimated is disabled
   const animatedFolderHeaderStyle = {
@@ -234,38 +405,38 @@ export const TaskFolder: React.FC<Props> = ({
           }}
           nativeID={`task-list-${folderName}`}
         >
-          {isDraggableMode ? (
-            // 🔥 Skia Canvas GPU描画モード（完全カスタム実装）
-            <SkiaTaskCanvas
-              tasks={tasks}
-              onTaskReorder={(from, to) => {
-                // 親への通知
-                onTaskReorder?.(from, to);
-              }}
-              onToggleTaskDone={onToggleTaskDone}
-              onTaskPress={(taskId) => {
-                // Safe navigation to task detail
-                try {
-                  require('expo-router').router.push(`/task-detail/${taskId}`);
-                } catch (error) {
-                  console.error('Navigation error:', error);
+          {isTaskReorderMode ? (
+            // 並べ替えモード - DraggableFlatListを独立コンテナで分離
+            <DraggableFlatList
+              data={pendingTasks}
+              renderItem={renderDraggableTaskItem}
+              keyExtractor={(item) => item.keyId}
+              onDragEnd={({ data, from, to }) => {
+                if (from !== to) {
+                  handleDragEnd(data, from, to);
                 }
+                // ドラッグ終了時に外側のスクロールを再有効化
+                onTaskDragStateChange?.(false);
               }}
-              selectedIds={selectedIds}
-              isSelecting={isSelecting}
-              onLongPressSelect={onLongPressSelect}
-              currentTab={currentTab}
-              canvasHeight={Math.max(300, tasks.length * 60)} // 動的高さ計算 (60px task height, very tight spacing)
-              isInsideFolder={true} // フォルダ内レイアウト指定
+              onDragBegin={() => {
+                // ドラッグ開始時に外側のスクロールを無効化
+                onTaskDragStateChange?.(true);
+              }}
+              activationDistance={20}
+              dragItemOverflow={false}
+              scrollEnabled={true}
+              nestedScrollEnabled={true}
+              simultaneousHandlers={[]}
+              style={{ flex: 1 }}
             />
           ) : (
-            // 通常モード（期限順ソートまたはドラッグ無効時）
+            // 通常モード
             (tasks || []).map((item, index) => renderRegularTaskItem({ item, index }))
           )}
         </View>
       )}
 
-      {/* GPU-optimized empty state */}
+      {/* Empty state */}
       {(!tasks || tasks.length === 0) && folderName && (
         <View 
           style={{ 

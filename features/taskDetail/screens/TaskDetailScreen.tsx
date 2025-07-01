@@ -166,7 +166,7 @@ export default function TaskDetailScreen() {
   const effectiveDueDateUtc = task.deadline ? dayjs.utc(task.deadline) : null;
   const countdownText = getTimeText(task as any, t, effectiveDueDateUtc ?? undefined);
 
-  const isDone = task.deadlineDetails?.repeatFrequency && effectiveDueDateUtc
+  const isDone = task.deadlineDetails?.repeatFrequency && effectiveDueDateUtc && effectiveDueDateUtc.format
     ? task.completedInstanceDates?.includes(effectiveDueDateUtc.format('YYYY-MM-DD')) ?? false
     : !!task.completedAt;
 
