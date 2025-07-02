@@ -35,6 +35,22 @@ type TaskViewPagerProps = {
   onChangeSortMode?: (sortMode: 'deadline' | 'custom') => void;
   onReorderModeChange?: (isReorderMode: boolean, hasChanges: boolean, onConfirm: () => void, onCancel: () => void) => void;
   folderOrder?: string[];
+  
+  // ===== CENTRALIZED DRAG & DROP PROPS =====
+  // State from useTasksScreenLogic
+  pendingTasksByFolder?: Map<string, DisplayableTaskItem[]>;
+  hasChangesByFolder?: Map<string, boolean>;
+  isScrollEnabled?: boolean;
+  // Handlers from useTasksScreenLogic
+  onLongPressStart?: (itemId: string, folderName: string) => void;
+  onDragUpdate?: (translationY: number, itemId: string, folderName: string) => void;
+  onDragEnd?: (fromIndex: number, translationY: number, itemId: string, folderName: string) => void;
+  // Shared values from useTasksScreenLogic
+  isDragMode?: any; // SharedValue<boolean>
+  draggedItemId?: any; // SharedValue<string>
+  dragTargetIndex?: any; // SharedValue<number>
+  draggedItemOriginalIndex?: any; // SharedValue<number>
+  draggedItemFolderName?: any; // SharedValue<string>
 };
 
 const windowWidth = Dimensions.get('window').width;
@@ -66,6 +82,19 @@ export const TaskViewPager: React.FC<TaskViewPagerProps> = ({
   onChangeSortMode,
   onReorderModeChange,
   folderOrder = [],
+  
+  // ===== CENTRALIZED DRAG & DROP PROPS =====
+  pendingTasksByFolder,
+  hasChangesByFolder,
+  isScrollEnabled,
+  onLongPressStart,
+  onDragUpdate,
+  onDragEnd,
+  isDragMode,
+  draggedItemId,
+  dragTargetIndex,
+  draggedItemOriginalIndex,
+  draggedItemFolderName,
 }) => {
   // State to control ScrollView scroll enabled
   const [isTaskDragging, setIsTaskDragging] = useState(false);
@@ -92,7 +121,7 @@ export const TaskViewPager: React.FC<TaskViewPagerProps> = ({
       <ScrollView 
         key={`page-${pageFolderName}-${pageIndex}`} 
         style={{ width: windowWidth, flex: 1 }}
-        contentContainerStyle={{ paddingTop: 8, paddingBottom: isSelecting ? SELECTION_BAR_HEIGHT + 20 : 100 }}
+        contentContainerStyle={{ paddingTop: 8, paddingBottom: isSelecting ? SELECTION_BAR_HEIGHT + 20 : 20 }}
         showsVerticalScrollIndicator={true}
         scrollEventThrottle={8}
         removeClippedSubviews={true}
@@ -131,6 +160,19 @@ export const TaskViewPager: React.FC<TaskViewPagerProps> = ({
               onTaskDragStateChange: handleTaskDragStateChange,
               onChangeSortMode,
               onReorderModeChange,
+              
+              // ===== CENTRALIZED DRAG & DROP PROPS =====
+              pendingTasks: pendingTasksByFolder?.get(folderName),
+              hasChanges: hasChangesByFolder?.get(folderName) || false,
+              isScrollEnabled,
+              onLongPressStart,
+              onDragUpdate,
+              onDragEnd,
+              isDragMode,
+              draggedItemId,
+              dragTargetIndex,
+              draggedItemOriginalIndex,
+              draggedItemFolderName,
             };
             return <TaskFolder key={`${pageFolderName}-${folderName}-${pageIndex}`} {...taskFolderProps} />;
           })}

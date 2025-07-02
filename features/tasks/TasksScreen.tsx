@@ -67,6 +67,9 @@ export default function TasksScreen() {
     tasks,
   } = logic;
 
+  // Debug: Track reorder mode state
+  console.log('🔥 TasksScreen render - logic.isTaskReorderMode:', logic.isTaskReorderMode, 'taskReorderState.isReorderMode:', taskReorderState.isReorderMode);
+
 
   const handleSortOptionSelect = (newSortMode: SortMode) => {
     setSortMode(newSortMode);
@@ -80,12 +83,23 @@ export default function TasksScreen() {
     onConfirm: () => void, 
     onCancel: () => void
   ) => {
-    setTaskReorderState(prev => ({
-      ...prev,
-      hasChanges,
-      onConfirm,
-      onCancel,
-    }));
+    console.log('🔥 TasksScreen handleReorderModeChange called:', { isReorderMode, hasChanges });
+    
+    setTaskReorderState(prev => {
+      // 同じ状態の場合は更新しない
+      if (prev.isReorderMode === isReorderMode && prev.hasChanges === hasChanges) {
+        return prev;
+      }
+      
+      const newState = {
+        isReorderMode,
+        hasChanges,
+        onConfirm,
+        onCancel,
+      };
+      console.log('🔥 Setting new taskReorderState:', newState);
+      return newState;
+    });
   }, []);
 
 
@@ -160,15 +174,28 @@ export default function TasksScreen() {
           t={t}
           memoizedPagesData={memoizedPagesData}
           sortMode={sortMode}
-          isTaskReorderMode={taskReorderState.isReorderMode}
+          isTaskReorderMode={logic.isTaskReorderMode}
           onTaskReorder={logic.createTaskReorderHandler}
           onChangeSortMode={setSortMode}
           onReorderModeChange={handleReorderModeChange}
           folderOrder={folderOrder}
+          
+          // ===== CENTRALIZED DRAG & DROP PROPS =====
+          pendingTasksByFolder={logic.pendingTasksByFolder}
+          hasChangesByFolder={logic.hasChangesByFolder}
+          isScrollEnabled={logic.isScrollEnabled}
+          onLongPressStart={logic.handleLongPressStart}
+          onDragUpdate={logic.handleDragUpdate}
+          onDragEnd={logic.handleDragEnd}
+          isDragMode={logic.isDragMode}
+          draggedItemId={logic.draggedItemId}
+          dragTargetIndex={logic.dragTargetIndex}
+          draggedItemOriginalIndex={logic.draggedItemOriginalIndex}
+          draggedItemFolderName={logic.draggedItemFolderName}
         />
       )}
 
-      {!isReordering && !taskReorderState.isReorderMode && (
+      {!isReordering && !logic.isTaskReorderMode && (
         <TouchableOpacity
           style={[styles.fab, { bottom: Platform.OS === 'ios' ? 16 : 16 }]}
           onPress={() => router.push('/add/')}
@@ -179,7 +206,7 @@ export default function TasksScreen() {
 
 
       {/* Task Reorder Mode Buttons - 画面下部中央に独立配置 */}
-      {taskReorderState.isReorderMode && (
+      {logic.isTaskReorderMode && (
         <View style={{
           position: 'absolute',
           bottom: Platform.OS === 'ios' ? 34 : 16, // iOSのHome Indicator考慮
@@ -207,7 +234,7 @@ export default function TasksScreen() {
               elevation: 4,
             }}
             onPress={() => {
-              taskReorderState.onCancel?.();
+              logic.handleTaskReorderCancel();
             }}
           >
             <Ionicons name="close" size={20} color={isDark ? '#FFFFFF' : '#000000'} />
@@ -222,7 +249,7 @@ export default function TasksScreen() {
           
           <TouchableOpacity 
             style={{
-              backgroundColor: taskReorderState.hasChanges ? subColor : (isDark ? '#48484A' : '#E5E5EA'),
+              backgroundColor: logic.hasAnyChanges ? subColor : (isDark ? '#48484A' : '#E5E5EA'),
               paddingVertical: 12,
               paddingHorizontal: 24,
               borderRadius: 25,
@@ -234,20 +261,20 @@ export default function TasksScreen() {
               shadowOpacity: 0.1,
               shadowRadius: 4,
               elevation: 4,
-              opacity: taskReorderState.hasChanges ? 1 : 0.6,
+              opacity: logic.hasAnyChanges ? 1 : 0.6,
             }}
             onPress={() => {
-              taskReorderState.onConfirm?.();
+              logic.handleTaskReorderConfirm();
             }}
-            disabled={!taskReorderState.hasChanges}
+            disabled={!logic.hasAnyChanges}
           >
             <Ionicons 
               name="checkmark" 
               size={20} 
-              color={taskReorderState.hasChanges ? '#FFFFFF' : (isDark ? '#8E8E93' : '#C7C7CC')} 
+              color={logic.hasAnyChanges ? '#FFFFFF' : (isDark ? '#8E8E93' : '#C7C7CC')} 
             />
             <Text style={{ 
-              color: taskReorderState.hasChanges ? '#FFFFFF' : (isDark ? '#8E8E93' : '#C7C7CC'),
+              color: logic.hasAnyChanges ? '#FFFFFF' : (isDark ? '#8E8E93' : '#C7C7CC'),
               fontWeight: '600',
               fontSize: 16,
             }}>

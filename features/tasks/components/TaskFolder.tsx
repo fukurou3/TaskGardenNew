@@ -1,10 +1,11 @@
 // app/features/tasks/components/TaskFolder.tsx
-import React, { useContext, useState, useCallback, useMemo, useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, FlatList, Animated, Pressable } from 'react-native';
+import React, { useContext, useMemo } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import DraggableFlatList, { ScaleDecorator } from 'react-native-draggable-flatlist';
+import ReanimatedAnimated from 'react-native-reanimated';
 import { DisplayableTaskItem } from '../types';
 import { TaskItem } from './TaskItem';
+import { SafeGestureTaskItem } from './SafeGestureTaskItem';
 import { useAppTheme } from '@/hooks/ThemeContext';
 import { useTranslation } from 'react-i18next';
 import { FontSizeContext, FontSizeKey } from '@/context/FontSizeContext';
@@ -43,15 +44,28 @@ export interface Props {
   onTaskDragStateChange?: (isDragging: boolean) => void;
   onChangeSortMode?: (sortMode: 'deadline' | 'custom') => void;
   onReorderModeChange?: (isReorderMode: boolean, hasChanges: boolean, onConfirm: () => void, onCancel: () => void) => void;
+  
+  // ===== CENTRALIZED DRAG & DROP PROPS =====
+  // Pending tasks for this folder (from parent)
+  pendingTasks?: DisplayableTaskItem[];
+  hasChanges?: boolean;
+  isScrollEnabled?: boolean;
+  // Centralized drag handlers (from parent)
+  onLongPressStart?: (itemId: string, folderName: string) => void;
+  onDragUpdate?: (translationY: number, itemId: string, folderName: string) => void;
+  onDragEnd?: (fromIndex: number, translationY: number, itemId: string, folderName: string) => void;
+  // Centralized shared values (from parent)
+  isDragMode?: any; // SharedValue<boolean>
+  draggedItemId?: any; // SharedValue<string>
+  dragTargetIndex?: any; // SharedValue<number>
+  draggedItemOriginalIndex?: any; // SharedValue<number>
+  draggedItemFolderName?: any; // SharedValue<string>
 }
 
 export const TaskFolder: React.FC<Props> = ({
   folderName,
   tasks,
-  // isCollapsed, // ← 削除
-  // toggleFolder, // ← 削除
   onToggleTaskDone,
-  // onRefreshTasks,
   isReordering,
   setDraggingFolder,
   draggingFolder,
@@ -70,6 +84,19 @@ export const TaskFolder: React.FC<Props> = ({
   onTaskDragStateChange,
   onChangeSortMode,
   onReorderModeChange,
+  
+  // ===== CENTRALIZED DRAG & DROP PROPS =====
+  pendingTasks,
+  hasChanges,
+  isScrollEnabled = true,
+  onLongPressStart,
+  onDragUpdate,
+  onDragEnd,
+  isDragMode,
+  draggedItemId,
+  dragTargetIndex,
+  draggedItemOriginalIndex,
+  draggedItemFolderName,
 }) => {
   const { colorScheme, subColor } = useAppTheme();
   const isDark = colorScheme === 'dark';
@@ -78,52 +105,31 @@ export const TaskFolder: React.FC<Props> = ({
   const styles = useMemo(() => createStyles(isDark, subColor, fontSizeKey), [isDark, subColor, fontSizeKey]);
   const { t } = useTranslation();
   const baseFontSize = fontSizes[fontSizeKey];
+
   const noFolderName = t('common.no_folder_name', 'フォルダなし');
+  
+  // Debug: Track isTaskReorderMode changes
+  console.log('🔥 TaskFolder render - folderName:', folderName, 'isTaskReorderMode:', isTaskReorderMode);
+  
+
+
+
+
+
 
 
   const isFolderSelected = isSelecting && selectedIds.includes(folderName);
   
-  // DraggableFlatList用の状態管理
-  const [pendingTasks, setPendingTasks] = useState<DisplayableTaskItem[]>([]);
-  const [hasChanges, setHasChanges] = useState(false);
   
   
-  // 並べ替えモードの条件
-  const isDraggableMode = sortMode === 'custom' && currentTab === 'incomplete' && !isSelecting && (tasks?.length || 0) > 1;
   
   
-  // グローバル並べ替えモード開始時にpendingTasksを初期化
-  useEffect(() => {
-    if (isTaskReorderMode && tasks.length > 0) {
-      setPendingTasks([...tasks]);
-      setHasChanges(false);
-    } else if (!isTaskReorderMode) {
-      setPendingTasks([]);
-      setHasChanges(false);
-    }
-  }, [isTaskReorderMode, tasks]);
-
-  // 並べ替えモード状態を親に通知
-  useEffect(() => {
-    if (onReorderModeChange) {
-      onReorderModeChange(isTaskReorderMode, hasChanges, handleConfirmReorder, handleCancelReorder);
-    }
-  }, [isTaskReorderMode, hasChanges, onReorderModeChange]);
-  
-  // ドラッグ状態を親に通知して外側のScrollViewを制御
-  useEffect(() => {
-    if (onTaskDragStateChange) {
-      onTaskDragStateChange(isTaskReorderMode);
-    }
-  }, [isTaskReorderMode, onTaskDragStateChange]);
   
   
-  // Remove excessive debug logging
   
   
 
 
-  // handleToggleReorderMode削除
 
 
 
@@ -139,187 +145,10 @@ export const TaskFolder: React.FC<Props> = ({
 
 
 
-  // 並べ替え処理
-  const handleDragEnd = useCallback((data: DisplayableTaskItem[], from: number, to: number) => {
-    if (from === to) return;
-    console.log('📝 TaskFolder: 並び替え実行:', from, '->', to);
-    setPendingTasks(data);
-    setHasChanges(true);
-  }, []);
-  
-  
-  // 並べ替え確定
-  const handleConfirmReorder = useCallback(async () => {
-    if (!hasChanges) {
-      return;
-    }
-    
-    try {
-      // ソートモードをカスタム順に変更（並び替えを行ったため）
-      if (sortMode !== 'custom') {
-        console.log('📋 ソートモードをカスタム順に変更');
-        onChangeSortMode?.('custom');
-      }
-      
-      // 親に並び替え結果を通知
-      for (let i = 0; i < pendingTasks.length; i++) {
-        if (pendingTasks[i].id !== tasks[i]?.id) {
-          // 並び替えが必要
-          const originalIndex = tasks.findIndex(t => t.id === pendingTasks[i].id);
-          if (originalIndex !== -1 && originalIndex !== i) {
-            await onTaskReorder?.(originalIndex, i);
-            break; // 一度に一つずつ処理
-          }
-        }
-      }
-    } catch (error) {
-      console.error('TaskFolder: 並び替え確定エラー:', error);
-    } finally {
-      setHasChanges(false);
-    }
-  }, [hasChanges, pendingTasks, tasks, onTaskReorder, sortMode, onChangeSortMode]);
-  
-  // 並べ替えキャンセル
-  const handleCancelReorder = useCallback(() => {
-    setPendingTasks([...tasks]);
-    setHasChanges(false);
-  }, [tasks]);
-  
-  // Long-press drag functionality (from test screen)
-  const handleLongPressSelect = useCallback((id: string) => {
-    if (isTaskReorderMode || isSelecting) {
-      return;
-    }
-    
-    // Enter task reorder mode
-    onReorderModeChange?.(true, false, handleConfirmReorder, handleCancelReorder);
-  }, [isTaskReorderMode, isSelecting, onReorderModeChange]);
-
-  // 6つの点でのドラッグ並び替え + Long-press functionality
-  const renderDraggableTaskItem = useCallback(({ item, drag, isActive }: any) => {
-    return (
-      <Pressable
-        onLongPress={() => {
-          if (!isTaskReorderMode) {
-            handleLongPressSelect(item.keyId);
-          }
-        }}
-        onPress={() => {
-          if (isTaskReorderMode) {
-            return;
-          }
-          // Handle task tap in normal mode
-        }}
-        delayLongPress={500}
-        disabled={isTaskReorderMode}
-        style={({ pressed }) => [{
-          flexDirection: 'row',
-          alignItems: 'center',
-          backgroundColor: isTaskReorderMode 
-            ? (isDark ? '#1C1C1E' : '#F2F2F7') 
-            : pressed 
-              ? (isDark ? '#2C2C2E' : '#F0F0F0')
-              : 'transparent',
-          paddingRight: isTaskReorderMode ? 16 : 0,
-        }]}
-      >
-        {/* タスク内容部分 - ドラッグ無効、通常タッチ可能 */}
-        <View 
-          style={{ flex: 1 }}
-          pointerEvents={isTaskReorderMode ? 'none' : 'auto'}
-        >
-          <TaskItem
-            task={item}
-            onToggle={isTaskReorderMode ? () => {} : onToggleTaskDone}
-            isSelecting={false}
-            selectedIds={[]}
-            onLongPressSelect={(type, id) => {
-              if (!isTaskReorderMode && !isSelecting) {
-                handleLongPressSelect(id);
-              }
-            }}
-            currentTab={currentTab}
-            isInsideFolder={true}
-            isLastItem={false}
-            isDraggable={false}
-            isActive={isActive}
-          />
-        </View>
-        
-        {/* 3つの点 - ドラッグハンドル */}
-        {isTaskReorderMode && (
-          <TouchableOpacity
-            onPressIn={drag}
-            delayPressIn={0}
-            activeOpacity={0.8}
-            style={{
-              paddingVertical: 16,
-              paddingHorizontal: 16,
-              justifyContent: 'center',
-              alignItems: 'center',
-              backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
-              borderRadius: 8,
-              marginRight: 8,
-              marginLeft: 8,
-              minWidth: 44,
-              minHeight: 44,
-            }}
-          >
-            <View style={{
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: 3,
-            }}>
-              {Array.from({ length: 3 }, (_, i) => (
-                <View
-                  key={i}
-                  style={{
-                    width: 4,
-                    height: 4,
-                    backgroundColor: isDark ? '#8E8E93' : '#C7C7CC',
-                    borderRadius: 2,
-                    opacity: 0.8,
-                  }}
-                />
-              ))}
-            </View>
-          </TouchableOpacity>
-        )}
-      </Pressable>
-    );
-  }, [isTaskReorderMode, onToggleTaskDone, currentTab, isDark, handleLongPressSelect, isSelecting]);
   
 
-  // 通常TaskItem with long-press support
-  const renderRegularTaskItem = useCallback(({ item, index }: { item: DisplayableTaskItem, index: number }) => {
-    return (
-      <Pressable
-        onLongPress={() => {
-          if (!isTaskReorderMode && !isSelecting && sortMode === 'custom' && currentTab === 'incomplete') {
-            handleLongPressSelect(item.keyId);
-          }
-        }}
-        delayLongPress={500}
-      >
-        <TaskItem
-          key={item.keyId}
-          task={item}
-          onToggle={onToggleTaskDone}
-          isSelecting={isSelecting}
-          selectedIds={selectedIds}
-          onLongPressSelect={(type, id) => {
-            if (!isTaskReorderMode && !isSelecting && sortMode === 'custom' && currentTab === 'incomplete') {
-              handleLongPressSelect(id);
-            }
-          }}
-          currentTab={currentTab}
-          isInsideFolder={true}
-          isLastItem={index === tasks.length - 1}
-          isDraggable={false}
-        />
-      </Pressable>
-    );
-  }, [tasks.length, onToggleTaskDone, isSelecting, selectedIds, currentTab, isTaskReorderMode, sortMode, handleLongPressSelect]);
+  
+
 
   // Mock animations since Reanimated is disabled
   const animatedFolderHeaderStyle = {
@@ -380,51 +209,57 @@ export const TaskFolder: React.FC<Props> = ({
           }}
           nativeID={`task-list-${folderName}`}
         >
-          {isTaskReorderMode ? (
-            // 並べ替えモード - DraggableFlatListを独立コンテナで分離
-            <DraggableFlatList
-              key={`reorder-${folderName}`}
-              data={pendingTasks}
-              renderItem={renderDraggableTaskItem}
-              keyExtractor={(item) => item.keyId}
-              onDragEnd={({ data, from, to }) => {
-                if (from !== to) {
-                  handleDragEnd(data, from, to);
-                }
-                // ドラッグ終了時に外側のスクロールを再有効化
-                onTaskDragStateChange?.(false);
-              }}
-              onDragBegin={() => {
-                // ドラッグ開始時に外側のスクロールを無効化
-                onTaskDragStateChange?.(true);
-              }}
-              activationDistance={isTaskReorderMode ? 0 : 99999}
-              dragItemOverflow={true}
-              scrollEnabled={true}
-              autoscrollThreshold={50}
-              autoscrollSpeed={100}
-              animationConfig={{
-                damping: 20,
-                mass: 0.2,
-                stiffness: 100,
-                overshootClamping: true,
-                restSpeedThreshold: 0.2,
-                restDisplacementThreshold: 0.2,
-              }}
-              panGestureHandlerProps={{
-                enabled: isTaskReorderMode,
-                minDist: isTaskReorderMode ? 3 : 999,
-                activeOffsetX: isTaskReorderMode ? [-20, 20] : undefined,
-                activeOffsetY: isTaskReorderMode ? [-5, 5] : undefined,
-                failOffsetX: isTaskReorderMode ? undefined : [-10, 10],
-                failOffsetY: isTaskReorderMode ? undefined : [-10, 10],
-              }}
-              style={{ flex: 1 }}
-            />
-          ) : (
-            // 通常モード
-            (tasks || []).map((item, index) => renderRegularTaskItem({ item, index }))
-          )}
+          {/* Enhanced FlatList with SafeGestureTaskItem */}
+          <ReanimatedAnimated.FlatList
+            key={`enhanced-${folderName}`}
+            data={pendingTasks || tasks}
+            renderItem={({ item, index }) => {
+              if (!item || !item.keyId) {
+                return null;
+              }
+              
+              return (
+                <SafeGestureTaskItem
+                  key={item.keyId}
+                  item={item}
+                  index={index}
+                  folderName={folderName}
+                  
+                  // TaskItem props
+                  onToggleTaskDone={onToggleTaskDone}
+                  isSelecting={isSelecting}
+                  selectedIds={selectedIds}
+                  onLongPressSelect={onLongPressSelect}
+                  currentTab={currentTab}
+                  isTaskReorderMode={isTaskReorderMode}
+                  
+                  // Centralized drag handlers
+                  onLongPressStart={onLongPressStart}
+                  onDragUpdate={onDragUpdate}
+                  onDragEnd={onDragEnd}
+                  
+                  // Centralized shared values
+                  isDragMode={isDragMode}
+                  draggedItemId={draggedItemId}
+                  dragTargetIndex={dragTargetIndex}
+                  draggedItemOriginalIndex={draggedItemOriginalIndex}
+                  draggedItemFolderName={draggedItemFolderName}
+                />
+              );
+            }}
+            keyExtractor={(item, index) => item?.keyId || `task-${index}`}
+            scrollEnabled={isScrollEnabled}
+            contentContainerStyle={{ 
+              paddingTop: 8, 
+              paddingBottom: isTaskReorderMode ? 20 : 8 
+            }}
+            removeClippedSubviews={true}
+            maxToRenderPerBatch={10}
+            updateCellsBatchingPeriod={50}
+            initialNumToRender={10}
+            windowSize={10}
+            showsVerticalScrollIndicator={true}
+          />
         </View>
       )}
 

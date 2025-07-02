@@ -1,6 +1,6 @@
 // app/features/tasks/hooks/useTasksScreenLogic.ts
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Alert, Dimensions, Platform, ScrollView } from 'react-native';
+import { Alert, Dimensions, Platform, ScrollView, InteractionManager } from 'react-native';
 import { getItem, setItem } from '@/lib/Storage';
 import TasksDatabase from '@/lib/TaskDatabase';
 import dayjs from 'dayjs';
@@ -8,6 +8,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import PagerView, { type PagerViewOnPageSelectedEvent, type PagerViewOnPageScrollEvent } from 'react-native-pager-view';
 import { Animated } from 'react-native';
+import { useSharedValue, useAnimatedReaction, runOnJS } from 'react-native-reanimated';
 
 import type { Task, FolderOrder, SelectableItem, DisplayTaskOriginal, DisplayableTaskItem } from '@/features/tasks/types';
 import { calculateNextDisplayInstanceDate, calculateActualDueDate } from '@/features/tasks/utils';
@@ -48,6 +49,21 @@ export const useTasksScreenLogic = () => {
   const [renameModalVisible, setRenameModalVisible] = useState(false);
   const [renameTarget, setRenameTarget] = useState<string | null>(null);
 
+  // ===== DRAG & DROP STATE MANAGEMENT =====
+  // Centralized drag & drop state management for all folders
+  const [pendingTasksByFolder, setPendingTasksByFolder] = useState<Map<string, DisplayableTaskItem[]>>(new Map());
+  const [hasChangesByFolder, setHasChangesByFolder] = useState<Map<string, boolean>>(new Map());
+  const [isScrollEnabled, setIsScrollEnabled] = useState(true);
+
+  // Enhanced drag & drop shared values (centralized)
+  const isDragMode = useSharedValue(false);
+  const draggedItemId = useSharedValue<string>('');
+  const draggedItemY = useSharedValue(0);
+  const scrollEnabled = useSharedValue(true);
+  const dragTargetIndex = useSharedValue(-1);
+  const draggedItemOriginalIndex = useSharedValue(-1);
+  const draggedItemFolderName = useSharedValue<string>(''); // Track which folder is being dragged
+
   const selectionAnim = useRef(new Animated.Value(SELECTION_BAR_HEIGHT)).current;
   const pagerRef = useRef<PagerView>(null);
   const folderTabsScrollViewRef = useRef<ScrollView>(null);
@@ -59,6 +75,14 @@ export const useTasksScreenLogic = () => {
   const [pageScrollPosition, setPageScrollPosition] = useState(0);
 
   const noFolderName = useMemo(() => t('common.no_folder_name', 'フォルダなし'), [t]);
+
+  // Immediate reaction to shared value changes (scroll control)
+  useAnimatedReaction(
+    () => scrollEnabled.value,
+    (current) => {
+      runOnJS(setIsScrollEnabled)(current);
+    }
+  );
 
   // React.useRefを使って循環参照を断ち切る
   const tasksRef = useRef(tasks);
@@ -230,18 +254,30 @@ export const useTasksScreenLogic = () => {
 
   const syncTasksToDatabase = async (prevTasks: Task[], newTasks: Task[]) => {
     try {
+      console.log('🔥 syncTasksToDatabase: Starting sync...');
+      console.log('🔥 syncTasksToDatabase: prevTasks count:', prevTasks.length);
+      console.log('🔥 syncTasksToDatabase: newTasks count:', newTasks.length);
+      
       const prevIds = new Set(prevTasks.map(t => t.id));
       const newIds = new Set(newTasks.map(t => t.id));
+      
       for (const task of newTasks) {
+        console.log('🔥 syncTasksToDatabase: Saving task:', task.id, task.title);
         await TasksDatabase.saveTask(task as any);
+        console.log('🔥 syncTasksToDatabase: Task saved successfully:', task.id);
       }
+      
       for (const id of prevIds) {
         if (!newIds.has(id)) {
+          console.log('🔥 syncTasksToDatabase: Deleting task:', id);
           await TasksDatabase.deleteTask(id);
         }
       }
+      
+      console.log('🔥 syncTasksToDatabase: All tasks synced successfully');
     } catch (e) {
-      console.error('Failed to sync tasks with DB:', e);
+      console.error('🔥 syncTasksToDatabase: Failed to sync tasks with DB:', e);
+      throw e;
     }
   };
 
@@ -907,15 +943,20 @@ export const useTasksScreenLogic = () => {
   const reorderLockRef = useRef<Promise<void> | null>(null);
 
   const handleTaskReorder = useCallback(async (folderName: string, fromIndex: number, toIndex: number) => {
-    if (fromIndex === toIndex) return;
+    console.log(`🔥 handleTaskReorder called: folder=${folderName}, from=${fromIndex}, to=${toIndex}`);
+    
+    if (fromIndex === toIndex) {
+      console.log('🔥 handleTaskReorder: fromIndex === toIndex, skipping');
+      return;
+    }
 
     // 並び替え操作のロック（前の操作が完了するまで待機）
     if (reorderLockRef.current) {
-      console.warn('Reorder operation already in progress, waiting...');
+      console.warn('🔥 Reorder operation already in progress, waiting...');
       try {
         await reorderLockRef.current;
       } catch (error) {
-        console.error('Previous reorder operation failed:', error);
+        console.error('🔥 Previous reorder operation failed:', error);
       }
     }
 
@@ -973,7 +1014,9 @@ export const useTasksScreenLogic = () => {
 
       // 🔥 Step 4: データベース同期（バックグラウンド）
       try {
+        console.log('🔥 Starting database sync...');
         await syncTasksToDatabase(currentTasks, optimisticTasks);
+        console.log('🔥 Database sync completed successfully');
         
         // Auto-exit task reorder mode after successful reorder
         setTimeout(() => {
@@ -1043,6 +1086,203 @@ export const useTasksScreenLogic = () => {
     }
   }, []);
 
+  // ===== CENTRALIZED DRAG & DROP HANDLERS =====
+  
+  // Utility to get pending tasks for a specific folder
+  const getPendingTasksForFolder = useCallback((folderName: string): DisplayableTaskItem[] => {
+    const currentPending = pendingTasksByFolder.get(folderName);
+    if (currentPending) {
+      return currentPending;
+    }
+    // Fallback to current displayable tasks
+    const pageData = memoizedPagesData.get(selectedFolderTabName);
+    if (pageData) {
+      return pageData.tasksByFolder.get(folderName) || [];
+    }
+    return [];
+  }, [pendingTasksByFolder, memoizedPagesData, selectedFolderTabName]);
+
+  // Utility to update pending tasks for a folder
+  const updatePendingTasks = useCallback((folderName: string, newTasks: DisplayableTaskItem[]) => {
+    setPendingTasksByFolder(prev => {
+      const newMap = new Map(prev);
+      newMap.set(folderName, newTasks);
+      return newMap;
+    });
+  }, []);
+
+  // Utility to clear drag state
+  const clearDragState = useCallback(() => {
+    InteractionManager.runAfterInteractions(() => {
+      isDragMode.value = false;
+      draggedItemId.value = '';
+      draggedItemY.value = 0;
+      dragTargetIndex.value = -1;
+      draggedItemOriginalIndex.value = -1;
+      draggedItemFolderName.value = '';
+      scrollEnabled.value = true;
+    });
+  }, [isDragMode, draggedItemId, draggedItemY, dragTargetIndex, draggedItemOriginalIndex, draggedItemFolderName, scrollEnabled]);
+
+  // Long press start handler (centralized)
+  const handleLongPressStart = useCallback((itemId: string, folderName: string) => {
+    console.log('🔥 Centralized long press detected for item:', itemId, 'folder:', folderName);
+    console.log('🔥 Current isTaskReorderMode:', isTaskReorderMode, 'isSelecting:', selectionHook.isSelecting);
+    
+    if (isTaskReorderMode || selectionHook.isSelecting) {
+      console.log('🔥 Long press blocked - already in reorder mode or selecting');
+      return;
+    }
+    
+    console.log('🔥 Entering task reorder mode from centralized handler');
+    setIsTaskReorderMode(true);
+    console.log('🔥 setIsTaskReorderMode(true) called');
+    
+    // Initialize pending tasks for this folder with current tasks from memoizedPagesData
+    const pageData = memoizedPagesData.get(selectedFolderTabName);
+    if (pageData) {
+      const currentTasks = pageData.tasksByFolder.get(folderName) || [];
+      if (currentTasks.length > 0) {
+        console.log(`🔥 Initializing pending tasks for folder ${folderName} with ${currentTasks.length} tasks`);
+        updatePendingTasks(folderName, [...currentTasks]);
+      }
+    }
+  }, [isTaskReorderMode, selectionHook.isSelecting, memoizedPagesData, selectedFolderTabName, updatePendingTasks]);
+
+  // Drag update handler (centralized)
+  const handleDragUpdate = useCallback((translationY: number, itemId: string, folderName: string) => {
+    const currentPendingTasks = getPendingTasksForFolder(folderName);
+    
+    // Initialize drag mode
+    if (!isDragMode.value) {
+      isDragMode.value = true;
+      draggedItemId.value = itemId;
+      draggedItemFolderName.value = folderName;
+      scrollEnabled.value = false;
+      
+      // Store original index
+      const originalIndex = currentPendingTasks.findIndex(task => task.keyId === itemId);
+      draggedItemOriginalIndex.value = originalIndex;
+    }
+    
+    // Calculate target index for spacing animation
+    const itemHeight = 80;
+    const originalIndex = draggedItemOriginalIndex.value;
+    if (originalIndex === -1) return;
+    
+    const moveDistance = Math.round(translationY / itemHeight);
+    const newIndex = Math.max(0, Math.min(currentPendingTasks.length - 1, originalIndex + moveDistance));
+    
+    // Update target index for spacing calculation
+    if (Math.abs(moveDistance) >= 1) {
+      dragTargetIndex.value = newIndex;
+    } else {
+      dragTargetIndex.value = -1;
+    }
+  }, [getPendingTasksForFolder, isDragMode, draggedItemId, draggedItemFolderName, scrollEnabled, dragTargetIndex, draggedItemOriginalIndex]);
+
+  // Drag end handler (centralized)
+  const handleDragEnd = useCallback((fromIndex: number, translationY: number, itemId: string, folderName: string) => {
+    console.log(`🔥 Centralized drag ended: fromIndex=${fromIndex}, translationY=${translationY}, itemId=${itemId}, folder=${folderName}`);
+    
+    const currentPendingTasks = getPendingTasksForFolder(folderName);
+    
+    // Validate inputs
+    if (fromIndex < 0 || fromIndex >= currentPendingTasks.length) {
+      clearDragState();
+      return;
+    }
+    
+    const draggedTask = currentPendingTasks[fromIndex];
+    if (!draggedTask || draggedTask.keyId !== itemId) {
+      clearDragState();
+      return;
+    }
+    
+    const itemHeight = 80;
+    const moveDistance = Math.round(translationY / itemHeight);
+    let newIndex = Math.max(0, Math.min(currentPendingTasks.length - 1, fromIndex + moveDistance));
+    
+    if (newIndex !== fromIndex && Math.abs(moveDistance) >= 1) {
+      console.log(`🔥 Reordering task from ${fromIndex} to ${newIndex} in folder ${folderName}`);
+      
+      const newTasks = [...currentPendingTasks];
+      const [movedItem] = newTasks.splice(fromIndex, 1);
+      newTasks.splice(newIndex, 0, movedItem);
+      
+      // Update pending tasks
+      updatePendingTasks(folderName, newTasks);
+      
+      // Mark as having changes
+      setHasChangesByFolder(prev => {
+        const newMap = new Map(prev);
+        newMap.set(folderName, true);
+        return newMap;
+      });
+    }
+    
+    // Clear drag state after interaction
+    clearDragState();
+  }, [getPendingTasksForFolder, updatePendingTasks, clearDragState]);
+
+  // Task reorder mode handlers (centralized)
+  const handleTaskReorderConfirm = useCallback(async () => {
+    console.log('🔥 Centralized reorder confirm');
+    
+    try {
+      // Process all pending changes for each folder
+      for (const [folderName, pendingTasks] of pendingTasksByFolder.entries()) {
+        const hasChanges = hasChangesByFolder.get(folderName);
+        if (!hasChanges || !pendingTasks || pendingTasks.length === 0) {
+          continue;
+        }
+        
+        console.log(`🔥 Processing reorder for folder: ${folderName}`);
+        
+        // Get current tasks for this folder
+        const currentFolderTasks = tasks.filter(task => (task.folder || noFolderName) === folderName);
+        
+        // Apply the new order based on pending tasks
+        for (let newIndex = 0; newIndex < pendingTasks.length; newIndex++) {
+          const pendingTask = pendingTasks[newIndex];
+          const originalIndex = currentFolderTasks.findIndex(t => t.id === pendingTask.id);
+          
+          if (originalIndex !== -1 && originalIndex !== newIndex) {
+            console.log(`🔥 Applying reorder: ${pendingTask.title} from ${originalIndex} to ${newIndex}`);
+            await handleTaskReorder(folderName, originalIndex, newIndex);
+            break; // Process one change at a time to avoid race conditions
+          }
+        }
+      }
+      
+      // Switch to custom sort mode if not already
+      if (sortMode !== 'custom') {
+        console.log('🔥 Switching to custom sort mode');
+        setSortMode('custom');
+      }
+    } catch (error) {
+      console.error('🔥 Error confirming task reorder:', error);
+    } finally {
+      // Clean up reorder mode state
+      setIsTaskReorderMode(false);
+      setPendingTasksByFolder(new Map());
+      setHasChangesByFolder(new Map());
+    }
+  }, [pendingTasksByFolder, hasChangesByFolder, tasks, noFolderName, handleTaskReorder, sortMode, setSortMode]);
+
+  const handleTaskReorderCancel = useCallback(() => {
+    console.log('🔥 Centralized reorder cancel');
+    setIsTaskReorderMode(false);
+    setPendingTasksByFolder(new Map());
+    setHasChangesByFolder(new Map());
+    clearDragState();
+  }, [clearDragState]);
+
+  // Check if any folder has changes
+  const hasAnyChanges = useMemo(() => {
+    return Array.from(hasChangesByFolder.values()).some(Boolean);
+  }, [hasChangesByFolder]);
+
   return {
     tasks, folderOrder, loading, activeTab, selectedFolderTabName, sortMode, sortModalVisible,
     isReordering, draggingFolder, isTaskReorderMode, renameModalVisible, renameTarget,
@@ -1072,5 +1312,30 @@ export const useTasksScreenLogic = () => {
     cleanupCustomOrdersForDeletedFolder,
     updateCustomOrdersForRenamedFolder,
     router, t,
+
+    // ===== CENTRALIZED DRAG & DROP EXPORTS =====
+    // State
+    pendingTasksByFolder,
+    hasChangesByFolder,
+    isScrollEnabled,
+    // Shared Values
+    isDragMode,
+    draggedItemId,
+    draggedItemY,
+    scrollEnabled,
+    dragTargetIndex,
+    draggedItemOriginalIndex,
+    draggedItemFolderName,
+    // Handlers
+    handleLongPressStart,
+    handleDragUpdate,
+    handleDragEnd,
+    handleTaskReorderConfirm,
+    handleTaskReorderCancel,
+    // Utilities
+    getPendingTasksForFolder,
+    updatePendingTasks,
+    clearDragState,
+    hasAnyChanges,
   };
 };
