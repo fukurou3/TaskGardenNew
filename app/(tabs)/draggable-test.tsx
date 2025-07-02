@@ -43,7 +43,7 @@ const SafeGestureTaskItem = ({
   onLongPressStart: (itemId: string) => void;
   onDragUpdate: (translationY: number, itemId: string) => void;
   onDragEnd: (index: number, translationY: number, itemId: string) => void;
-  renderContent: (item: DisplayableTaskItem, index: number, panGesture?: any) => React.ReactNode;
+  renderContent: (item: DisplayableTaskItem, index: number, panGesture?: any, animatedStyle?: any) => React.ReactNode;
   isReorderMode: boolean;
   dragTargetIndex: Animated.SharedValue<number>;
   draggedItemOriginalIndex: Animated.SharedValue<number>;
@@ -151,9 +151,9 @@ const SafeGestureTaskItem = ({
 
   return (
     <GestureDetector gesture={composedGesture}>
-      <Animated.View style={animatedStyle}>
-        {renderContent(item, index, isReorderMode ? panGesture : undefined)}
-      </Animated.View>
+      <View>
+        {renderContent(item, index, isReorderMode ? panGesture : undefined, animatedStyle)}
+      </View>
     </GestureDetector>
   );
 };
@@ -433,7 +433,7 @@ export default function DraggableTestScreen() {
   }, [isSelecting, isTaskReorderMode]);
 
   // Render task item content
-  const renderTaskItemContent = useCallback((item: DisplayableTaskItem, index: number, panGesture?: any) => {
+  const renderTaskItemContent = useCallback((item: DisplayableTaskItem, index: number, panGesture?: any, animatedStyle?: any) => {
     if (!item) {
       return null;
     }
@@ -489,6 +489,7 @@ export default function DraggableTestScreen() {
     
     return (
       <View>
+        {/* フォルダヘッダー - アニメーションしない */}
         {isFirstInFolder && (
           <View style={folderHeaderStyle}>
             <Ionicons
@@ -503,45 +504,48 @@ export default function DraggableTestScreen() {
           </View>
         )}
         
-        {isTaskReorderMode ? (
-          <View style={reorderRowStyle}>
-            <View style={{ flex: 1 }}>
+        {/* タスクアイテム - アニメーションを適用 */}
+        <Animated.View style={animatedStyle}>
+          {isTaskReorderMode ? (
+            <View style={reorderRowStyle}>
+              <View style={{ flex: 1 }}>
+                <TaskItem
+                  task={item}
+                  onToggle={() => {}}
+                  isSelecting={false}
+                  selectedIds={[]}
+                  onLongPressSelect={() => {}}
+                  currentTab={currentTab}
+                  isDraggable={false}
+                />
+              </View>
+              
+              <GestureDetector gesture={panGesture}>
+                <Animated.View style={dragHandleStyle}>
+                  <Text style={dragTextStyle}>ドラッグ</Text>
+                </Animated.View>
+              </GestureDetector>
+            </View>
+          ) : (
+            <View style={{ backgroundColor: 'transparent' }}>
               <TaskItem
                 task={item}
-                onToggle={() => {}}
-                isSelecting={false}
-                selectedIds={[]}
-                onLongPressSelect={() => {}}
+                onToggle={handleToggleTaskDone}
+                isSelecting={isSelecting}
+                selectedIds={selectedIds}
+                onLongPressSelect={(id) => {
+                  // Long press handling is now unified in GestureDetector
+                  // This is kept for compatibility but won't be triggered
+                  if (!isSelecting && currentTab === 'incomplete') {
+                    handleLongPressSelect(id);
+                  }
+                }}
                 currentTab={currentTab}
                 isDraggable={false}
               />
             </View>
-            
-            <GestureDetector gesture={panGesture}>
-              <Animated.View style={dragHandleStyle}>
-                <Text style={dragTextStyle}>ドラッグ</Text>
-              </Animated.View>
-            </GestureDetector>
-          </View>
-        ) : (
-          <View style={{ backgroundColor: 'transparent' }}>
-            <TaskItem
-              task={item}
-              onToggle={handleToggleTaskDone}
-              isSelecting={isSelecting}
-              selectedIds={selectedIds}
-              onLongPressSelect={(id) => {
-                // Long press handling is now unified in GestureDetector
-                // This is kept for compatibility but won't be triggered
-                if (!isSelecting && currentTab === 'incomplete') {
-                  handleLongPressSelect(id);
-                }
-              }}
-              currentTab={currentTab}
-              isDraggable={false}
-            />
-          </View>
-        )}
+          )}
+        </Animated.View>
       </View>
     );
   }, [
