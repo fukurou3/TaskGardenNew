@@ -1,6 +1,6 @@
 // app/(tabs)/draggable-test.tsx
 import React, { useState, useCallback, useEffect, useMemo, useContext } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, FlatList, Alert } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, FlatList, Alert, InteractionManager } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring, runOnJS, useAnimatedReaction } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
@@ -30,7 +30,9 @@ const SafeGestureTaskItem = ({
   onDragUpdate,
   onDragEnd,
   renderContent,
-  isReorderMode
+  isReorderMode,
+  dragTargetIndex,
+  draggedItemOriginalIndex
 }: {
   item: DisplayableTaskItem;
   index: number;
@@ -43,6 +45,8 @@ const SafeGestureTaskItem = ({
   onDragEnd: (index: number, translationY: number, itemId: string) => void;
   renderContent: (item: DisplayableTaskItem, index: number, panGesture?: any) => React.ReactNode;
   isReorderMode: boolean;
+  dragTargetIndex: Animated.SharedValue<number>;
+  draggedItemOriginalIndex: Animated.SharedValue<number>;
 }) => {
   // Safe values for worklet
   const itemId = item.keyId;
@@ -56,10 +60,32 @@ const SafeGestureTaskItem = ({
       runOnJS(onLongPressStart)(itemId);
     });
 
-  // Simplified pan gesture for drag handle
+  // Simplified animation: separate drag and spacing concerns
+  const dragTranslateY = useSharedValue(0);    // For drag movement
+  
+  // Reset individual item's translate when not being dragged
+  useAnimatedReaction(
+    () => isDragMode.value && draggedItemId.value === itemId,
+    (isDraggingThisItem) => {
+      if (!isDraggingThisItem) {
+        dragTranslateY.value = 0;
+      }
+    }
+  );
+  
   const panGesture = Gesture.Pan()
+    .onStart(() => {
+      'worklet';
+      runOnJS(onDragUpdate)(0, itemId); // Initialize drag mode
+    })
+    .onUpdate((event) => {
+      'worklet';
+      dragTranslateY.value = event.translationY;
+      runOnJS(onDragUpdate)(event.translationY, itemId);
+    })
     .onEnd((event) => {
       'worklet';
+      // Only notify JS thread - no SharedValue resets here
       runOnJS(onDragEnd)(index, event.translationY, itemId);
     });
 
@@ -67,12 +93,60 @@ const SafeGestureTaskItem = ({
   const composedGesture = isReorderMode ? Gesture.Tap() : longPressGesture;
 
   const animatedStyle = useAnimatedStyle(() => {
-    // ULTRA SIMPLE: No SharedValue usage in AnimatedStyle
-    return {
-      transform: [{ scale: 1 }] as any,
-      zIndex: 1,
-      elevation: 0,
-    };
+    const isDragging = draggedItemId.value === itemId;
+    const isDragModeActive = isDragMode.value;
+    
+    // 3つの明確な状態に分離
+    if (isDragging) {
+      // ①自分がドラッグされている最中 - 指に追従
+      return {
+        transform: [
+          { translateY: dragTranslateY.value },
+          { scale: 1.05 }
+        ] as any,
+        zIndex: 1000,
+        elevation: 10,
+      };
+    } else if (isDragModeActive) {
+      // ②他のアイテムがドラッグされている最中 - スペーシングアニメーション
+      const originalIndex = draggedItemOriginalIndex.value;
+      const targetIndex = dragTargetIndex.value;
+      const currentIndex = index;
+      
+      let spacingOffset = 0;
+      if (originalIndex !== -1 && targetIndex !== -1) {
+        if (originalIndex < targetIndex) {
+          // Dragging down: items between original and target move up
+          if (currentIndex > originalIndex && currentIndex <= targetIndex) {
+            spacingOffset = -80; // Move up to fill gap
+          }
+        } else if (originalIndex > targetIndex) {
+          // Dragging up: items between target and original move down
+          if (currentIndex >= targetIndex && currentIndex < originalIndex) {
+            spacingOffset = 80; // Move down to make space
+          }
+        }
+      }
+      
+      return {
+        transform: [
+          { translateY: withSpring(spacingOffset) },
+          { scale: 1 }
+        ] as any,
+        zIndex: 1,
+        elevation: 0,
+      };
+    } else {
+      // ③誰もドラッグされていない（通常時） - withSpringを使わない
+      return {
+        transform: [
+          { translateY: 0 },
+          { scale: 1 }
+        ] as any,
+        zIndex: 1,
+        elevation: 0,
+      };
+    }
   });
 
   return (
@@ -119,6 +193,8 @@ export default function DraggableTestScreen() {
   const draggedItemId = useSharedValue<string>('');
   const draggedItemY = useSharedValue(0);
   const scrollEnabled = useSharedValue(true);
+  const dragTargetIndex = useSharedValue(-1);
+  const draggedItemOriginalIndex = useSharedValue(-1);
   
   // React state for FlatList scroll control (synced with shared value)
   const [isScrollEnabled, setIsScrollEnabled] = useState(true);
@@ -202,18 +278,58 @@ export default function DraggableTestScreen() {
   }, [isTaskReorderMode, isSelecting, loadTasks]);
 
   const handleDragUpdate = useCallback((translationY: number, itemId: string) => {
-    // Simplified - no scroll disabling for now
-  }, []);
+    // Initialize drag mode
+    if (!isDragMode.value) {
+      isDragMode.value = true;
+      draggedItemId.value = itemId;
+      
+      // Store original index
+      const originalIndex = tasks.findIndex(task => task.keyId === itemId);
+      draggedItemOriginalIndex.value = originalIndex;
+    }
+    
+    // Calculate target index for spacing animation
+    const itemHeight = 80;
+    const originalIndex = draggedItemOriginalIndex.value;
+    if (originalIndex === -1) return;
+    
+    const moveDistance = Math.round(translationY / itemHeight);
+    const newIndex = Math.max(0, Math.min(tasks.length - 1, originalIndex + moveDistance));
+    
+    // Update target index for spacing calculation
+    if (Math.abs(moveDistance) >= 1) {
+      dragTargetIndex.value = newIndex;
+    } else {
+      dragTargetIndex.value = -1;
+    }
+  }, [tasks, isDragMode, draggedItemId, dragTargetIndex, draggedItemOriginalIndex]);
 
   const handleDragEnd = useCallback((fromIndex: number, translationY: number, itemId: string) => {
     console.log(`Drag ended: fromIndex=${fromIndex}, translationY=${translationY}, itemId=${itemId}`);
     
+    // --- ステップA: 並べ替えロジックの実行 ---
     if (fromIndex < 0 || fromIndex >= tasks.length) {
+      // Invalid index - reset animation state after interactions
+      InteractionManager.runAfterInteractions(() => {
+        isDragMode.value = false;
+        draggedItemId.value = '';
+        draggedItemY.value = 0;
+        dragTargetIndex.value = -1;
+        draggedItemOriginalIndex.value = -1;
+      });
       return;
     }
     
     const draggedTask = tasks[fromIndex];
     if (!draggedTask || draggedTask.keyId !== itemId) {
+      // Invalid task - reset animation state after interactions
+      InteractionManager.runAfterInteractions(() => {
+        isDragMode.value = false;
+        draggedItemId.value = '';
+        draggedItemY.value = 0;
+        dragTargetIndex.value = -1;
+        draggedItemOriginalIndex.value = -1;
+      });
       return;
     }
     
@@ -232,6 +348,14 @@ export default function DraggableTestScreen() {
     });
     
     if (sameFolderIndices.length <= 1) {
+      // Single item in folder - reset animation state after interactions
+      InteractionManager.runAfterInteractions(() => {
+        isDragMode.value = false;
+        draggedItemId.value = '';
+        draggedItemY.value = 0;
+        dragTargetIndex.value = -1;
+        draggedItemOriginalIndex.value = -1;
+      });
       return;
     }
     
@@ -255,10 +379,22 @@ export default function DraggableTestScreen() {
       const [movedItem] = newTasks.splice(fromIndex, 1);
       newTasks.splice(newIndex, 0, movedItem);
       
+      // 1. First update React state to trigger re-render
       setTasks(newTasks);
       setTaskReorderState(prev => ({ ...prev, hasChanges: true }));
     }
-  }, [tasks, noFolderName]);
+    
+    // --- ステップB: アニメーション状態のリセット ---
+    // InteractionManagerを使い、すべての操作（特にReactの再レンダリング）が
+    // 完了した「後」に、アニメーション用の共有値をリセットする
+    InteractionManager.runAfterInteractions(() => {
+      isDragMode.value = false;
+      draggedItemId.value = '';
+      draggedItemY.value = 0;
+      dragTargetIndex.value = -1;
+      draggedItemOriginalIndex.value = -1;
+    });
+  }, [tasks, noFolderName, isDragMode, draggedItemId, draggedItemY, dragTargetIndex, draggedItemOriginalIndex]);
 
   // Toggle task done
   const handleToggleTaskDone = useCallback(async (id: string, instanceDate?: string) => {
@@ -570,6 +706,8 @@ export default function DraggableTestScreen() {
                   onDragEnd={handleDragEnd}
                   renderContent={renderTaskItemContent}
                   isReorderMode={isTaskReorderMode}
+                  dragTargetIndex={dragTargetIndex}
+                  draggedItemOriginalIndex={draggedItemOriginalIndex}
                 />
               );
             }}
