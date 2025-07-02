@@ -103,6 +103,7 @@ export const SafeGestureTaskItem: React.FC<SafeGestureTaskItemProps> = ({
     .onEnd((event) => {
       'worklet';
       // Only notify JS thread - no SharedValue resets here
+      // Note: index may be stale after re-renders, but handleDragEnd will recalculate the actual index
       if (onDragEnd) {
         runOnJS(onDragEnd)(index, event.translationY, itemId, folderName);
       }

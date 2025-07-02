@@ -1138,16 +1138,31 @@ export const useTasksScreenLogic = () => {
     setIsTaskReorderMode(true);
     console.log('🔥 setIsTaskReorderMode(true) called');
     
-    // Initialize pending tasks for this folder with current tasks from memoizedPagesData
+    // ✅ 修正: 全フォルダのpendingTasksを初期化
+    console.log('🔥 Initializing pending tasks for all folders...');
     const pageData = memoizedPagesData.get(selectedFolderTabName);
     if (pageData) {
-      const currentTasks = pageData.tasksByFolder.get(folderName) || [];
-      if (currentTasks.length > 0) {
-        console.log(`🔥 Initializing pending tasks for folder ${folderName} with ${currentTasks.length} tasks`);
-        updatePendingTasks(folderName, [...currentTasks]);
+      // 全フォルダのタスクを初期化
+      const newPendingTasksByFolder = new Map<string, DisplayableTaskItem[]>();
+      const newHasChangesByFolder = new Map<string, boolean>();
+      
+      for (const [currentFolderName, folderTasks] of pageData.tasksByFolder.entries()) {
+        if (folderTasks.length > 0) {
+          newPendingTasksByFolder.set(currentFolderName, [...folderTasks]);
+          newHasChangesByFolder.set(currentFolderName, false);
+          console.log(`🔥 Initialized pending tasks for folder "${currentFolderName}" with ${folderTasks.length} tasks`);
+        }
       }
+      
+      setPendingTasksByFolder(newPendingTasksByFolder);
+      setHasChangesByFolder(newHasChangesByFolder);
+      
+      console.log('🔥 All pending tasks initialized successfully');
+      console.log('🔥 Initialized folders:', Array.from(newPendingTasksByFolder.keys()));
+    } else {
+      console.error('🔥 No page data found for selectedFolderTabName:', selectedFolderTabName);
     }
-  }, [isTaskReorderMode, selectionHook.isSelecting, memoizedPagesData, selectedFolderTabName, updatePendingTasks]);
+  }, [isTaskReorderMode, selectionHook.isSelecting, memoizedPagesData, selectedFolderTabName]);
 
   // Drag update handler (centralized)
   const handleDragUpdate = useCallback((translationY: number, itemId: string, folderName: string) => {
@@ -1187,28 +1202,44 @@ export const useTasksScreenLogic = () => {
     
     const currentPendingTasks = getPendingTasksForFolder(folderName);
     
-    // Validate inputs
-    if (fromIndex < 0 || fromIndex >= currentPendingTasks.length) {
+    // ✅ 修正: 渡されたfromIndexを使わず、最新のpendingTasksから実際のインデックスを再計算
+    const actualFromIndex = currentPendingTasks.findIndex(task => task.keyId === itemId);
+    console.log(`🔥 Recalculated actualFromIndex: ${actualFromIndex} (was passed fromIndex: ${fromIndex})`);
+    
+    // Validate inputs with recalculated index
+    if (actualFromIndex === -1) {
+      console.log('🔥 Item not found in current pending tasks, clearing drag state');
       clearDragState();
       return;
     }
     
-    const draggedTask = currentPendingTasks[fromIndex];
+    if (actualFromIndex < 0 || actualFromIndex >= currentPendingTasks.length) {
+      console.log('🔥 Invalid actualFromIndex, clearing drag state');
+      clearDragState();
+      return;
+    }
+    
+    const draggedTask = currentPendingTasks[actualFromIndex];
     if (!draggedTask || draggedTask.keyId !== itemId) {
+      console.log('🔥 Dragged task validation failed, clearing drag state');
       clearDragState();
       return;
     }
     
     const itemHeight = 80;
     const moveDistance = Math.round(translationY / itemHeight);
-    let newIndex = Math.max(0, Math.min(currentPendingTasks.length - 1, fromIndex + moveDistance));
+    let newIndex = Math.max(0, Math.min(currentPendingTasks.length - 1, actualFromIndex + moveDistance));
     
-    if (newIndex !== fromIndex && Math.abs(moveDistance) >= 1) {
-      console.log(`🔥 Reordering task from ${fromIndex} to ${newIndex} in folder ${folderName}`);
+    console.log(`🔥 Drag calculation: actualFromIndex=${actualFromIndex}, moveDistance=${moveDistance}, newIndex=${newIndex}`);
+    
+    if (newIndex !== actualFromIndex && Math.abs(moveDistance) >= 1) {
+      console.log(`🔥 Reordering task "${draggedTask.title}" from ${actualFromIndex} to ${newIndex} in folder ${folderName}`);
       
       const newTasks = [...currentPendingTasks];
-      const [movedItem] = newTasks.splice(fromIndex, 1);
+      const [movedItem] = newTasks.splice(actualFromIndex, 1);
       newTasks.splice(newIndex, 0, movedItem);
+      
+      console.log('🔥 New task order:', newTasks.map(t => t.title));
       
       // Update pending tasks
       updatePendingTasks(folderName, newTasks);
@@ -1219,6 +1250,8 @@ export const useTasksScreenLogic = () => {
         newMap.set(folderName, true);
         return newMap;
       });
+    } else {
+      console.log('🔥 No reordering needed or insufficient movement distance');
     }
     
     // Clear drag state after interaction
@@ -1228,31 +1261,54 @@ export const useTasksScreenLogic = () => {
   // Task reorder mode handlers (centralized)
   const handleTaskReorderConfirm = useCallback(async () => {
     console.log('🔥 Centralized reorder confirm');
+    console.log('🔥 Current pendingTasksByFolder:', pendingTasksByFolder);
+    console.log('🔥 Current hasChangesByFolder:', hasChangesByFolder);
     
     try {
+      // ✅ 修正: pendingTasksの新しい順序を直接tasksに反映
+      const updatedTasks = [...tasks];
+      let hasAnyChanges = false;
+      
       // Process all pending changes for each folder
       for (const [folderName, pendingTasks] of pendingTasksByFolder.entries()) {
         const hasChanges = hasChangesByFolder.get(folderName);
         if (!hasChanges || !pendingTasks || pendingTasks.length === 0) {
+          console.log(`🔥 Skipping folder ${folderName}: no changes or no tasks`);
           continue;
         }
         
-        console.log(`🔥 Processing reorder for folder: ${folderName}`);
+        console.log(`🔥 Processing reorder for folder: ${folderName} with ${pendingTasks.length} tasks`);
+        console.log('🔥 New order:', pendingTasks.map((t, i) => `${i}: ${t.title}`));
         
-        // Get current tasks for this folder
-        const currentFolderTasks = tasks.filter(task => (task.folder || noFolderName) === folderName);
+        // Get the base order for this folder
+        const baseOrder = getBaseOrderForFolder(folderName);
         
-        // Apply the new order based on pending tasks
+        // Update customOrder for all tasks in this folder based on new pending order
         for (let newIndex = 0; newIndex < pendingTasks.length; newIndex++) {
           const pendingTask = pendingTasks[newIndex];
-          const originalIndex = currentFolderTasks.findIndex(t => t.id === pendingTask.id);
+          const taskIndex = updatedTasks.findIndex(t => t.id === pendingTask.id);
           
-          if (originalIndex !== -1 && originalIndex !== newIndex) {
-            console.log(`🔥 Applying reorder: ${pendingTask.title} from ${originalIndex} to ${newIndex}`);
-            await handleTaskReorder(folderName, originalIndex, newIndex);
-            break; // Process one change at a time to avoid race conditions
+          if (taskIndex !== -1) {
+            const newCustomOrder = baseOrder + (newIndex * 10);
+            console.log(`🔥 Updating task "${pendingTask.title}": customOrder = ${newCustomOrder}`);
+            
+            updatedTasks[taskIndex] = {
+              ...updatedTasks[taskIndex],
+              customOrder: newCustomOrder
+            };
+            hasAnyChanges = true;
           }
         }
+      }
+      
+      if (hasAnyChanges) {
+        console.log('🔥 Applying task order changes to main tasks array');
+        setTasks(updatedTasks);
+        
+        // Sync to database
+        console.log('🔥 Starting database sync for reordered tasks');
+        await syncTasksToDatabase(tasks, updatedTasks);
+        console.log('🔥 Database sync completed for reordered tasks');
       }
       
       // Switch to custom sort mode if not already
@@ -1260,15 +1316,18 @@ export const useTasksScreenLogic = () => {
         console.log('🔥 Switching to custom sort mode');
         setSortMode('custom');
       }
+      
+      console.log('🔥 Task reorder confirmation completed successfully');
     } catch (error) {
       console.error('🔥 Error confirming task reorder:', error);
     } finally {
       // Clean up reorder mode state
+      console.log('🔥 Cleaning up reorder mode state');
       setIsTaskReorderMode(false);
       setPendingTasksByFolder(new Map());
       setHasChangesByFolder(new Map());
     }
-  }, [pendingTasksByFolder, hasChangesByFolder, tasks, noFolderName, handleTaskReorder, sortMode, setSortMode]);
+  }, [pendingTasksByFolder, hasChangesByFolder, tasks, noFolderName, getBaseOrderForFolder, sortMode, setSortMode, syncTasksToDatabase]);
 
   const handleTaskReorderCancel = useCallback(() => {
     console.log('🔥 Centralized reorder cancel');
