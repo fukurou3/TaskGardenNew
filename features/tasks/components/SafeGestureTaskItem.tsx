@@ -35,7 +35,7 @@ interface SafeGestureTaskItemProps {
   draggedItemFolderName?: any; // SharedValue<string>
 }
 
-export const SafeGestureTaskItem: React.FC<SafeGestureTaskItemProps> = ({
+export const SafeGestureTaskItem = React.memo<SafeGestureTaskItemProps>(({
   item,
   index,
   folderName,
@@ -252,4 +252,4 @@ export const SafeGestureTaskItem: React.FC<SafeGestureTaskItemProps> = ({
       </ReanimatedAnimated.View>
     </GestureDetector>
   );
-};
+});

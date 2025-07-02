@@ -5,7 +5,7 @@ import PagerView, { type PagerViewOnPageSelectedEvent, type PagerViewOnPageScrol
 import type { TaskScreenStyles } from '@/features/tasks/styles';
 import type { DisplayableTaskItem, SelectableItem } from '@/features/tasks/types';
 import { TaskFolder, type Props as TaskFolderProps } from '@/features/tasks/components/TaskFolder';
-import type { ActiveTab, FolderTab, MemoizedPageData } from '@/features/tasks/hooks/useTasksScreenLogic';
+import type { ActiveTab, FolderTab } from '@/features/tasks/hooks/useTasksScreenLogic';
 import { SELECTION_BAR_HEIGHT } from '@/features/tasks/constants';
 
 type TaskViewPagerProps = {
@@ -27,7 +27,7 @@ type TaskViewPagerProps = {
   onLongPressSelectItem: (type: 'task' | 'folder', id: string) => void;
   noFolderName: string;
   t: (key: string, options?: any) => string;
-  memoizedPagesData: Map<string, MemoizedPageData>;
+  baseProcessedTasks: DisplayableTaskItem[]; // ★ Replace memoizedPagesData with raw processed tasks
   sortMode?: 'deadline' | 'custom';
   isTaskReorderMode?: boolean;
   onTaskReorder?: (folderName: string) => (fromIndex: number, toIndex: number) => Promise<void>;
@@ -55,7 +55,7 @@ type TaskViewPagerProps = {
 
 const windowWidth = Dimensions.get('window').width;
 
-export const TaskViewPager: React.FC<TaskViewPagerProps> = ({
+export const TaskViewPager = React.memo<TaskViewPagerProps>(({
   styles,
   pagerRef,
   folderTabs,
@@ -74,7 +74,7 @@ export const TaskViewPager: React.FC<TaskViewPagerProps> = ({
   onLongPressSelectItem,
   noFolderName,
   t,
-  memoizedPagesData,
+  baseProcessedTasks,
   sortMode = 'deadline',
   isTaskReorderMode = false,
   onTaskReorder,
@@ -109,13 +109,24 @@ export const TaskViewPager: React.FC<TaskViewPagerProps> = ({
     setIsTaskDragging(isDragging);
   }, []);
   
-  // Simplified page rendering
+  // ★ PERFORMANCE OPTIMIZATION: Simplified page rendering with individual folder processing
   const renderPageContent = useMemo(() => (pageFolderName: string, pageIndex: number) => {
-    const pageData = memoizedPagesData.get(pageFolderName);
-    if (!pageData) {
-        return <View key={`page-${pageFolderName}-${pageIndex}`} style={{ width: windowWidth, flex: 1 }} />;
+    // Determine which folders to render based on page type
+    let foldersToRender: string[];
+    if (pageFolderName === 'all') {
+      // For 'all' page, render all folders in order
+      const allFolderNames = Array.from(new Set(baseProcessedTasks.map(t => t.folder || noFolderName)));
+      const ordered = folderOrder.filter(name => allFolderNames.includes(name) && name !== noFolderName);
+      const unordered = allFolderNames.filter(name => !folderOrder.includes(name) && name !== noFolderName).sort();
+      foldersToRender = [...ordered, ...unordered];
+      
+      if (allFolderNames.includes(noFolderName)) {
+        foldersToRender.push(noFolderName);
+      }
+    } else {
+      // For specific folder page, render only that folder
+      foldersToRender = [pageFolderName];
     }
-    const { foldersToRender, tasksByFolder, allTasksForPage } = pageData;
 
     return (
       <ScrollView 
@@ -131,16 +142,12 @@ export const TaskViewPager: React.FC<TaskViewPagerProps> = ({
         bouncesZoom={false}
         decelerationRate={0.998}
         snapToAlignment="start"
-        scrollEnabled={!isTaskDragging} // 実際にドラッグ中のみスクロール無効、並べ替えモード自体では有効
+        scrollEnabled={!isTaskDragging}
       >
           {foldersToRender.map((folderName, folderIndex) => {
-            const sortedFolderTasks = tasksByFolder.get(folderName) || [];
-            if (activeTab === 'completed' && sortedFolderTasks.length === 0) {
-              return null;
-            }
             const taskFolderProps: Omit<TaskFolderProps, 'isCollapsed' | 'toggleFolder' | 'onRefreshTasks'> = {
               folderName,
-              tasks: sortedFolderTasks,
+              tasks: baseProcessedTasks, // ★ Pass raw tasks - TaskFolder will filter them
               onToggleTaskDone: toggleTaskDone,
               isReordering: isReordering && draggingFolder === folderName && folderName !== noFolderName && pageFolderName === 'all',
               setDraggingFolder,
@@ -155,8 +162,8 @@ export const TaskViewPager: React.FC<TaskViewPagerProps> = ({
               isTaskReorderMode,
               onTaskReorder: onTaskReorder ? onTaskReorder(folderName) : undefined,
               onFolderReorder,
-              folderIndex: 0, // シンプル化：インデックスはmoveFolderOrder内で計算
-              totalFolders: 2, // シンプル化：とりあえず固定値
+              folderIndex: 0,
+              totalFolders: 2,
               onTaskDragStateChange: handleTaskDragStateChange,
               onChangeSortMode,
               onReorderModeChange,
@@ -176,7 +183,7 @@ export const TaskViewPager: React.FC<TaskViewPagerProps> = ({
             };
             return <TaskFolder key={`${pageFolderName}-${folderName}-${pageIndex}`} {...taskFolderProps} />;
           })}
-          {allTasksForPage.length === 0 && (
+          {baseProcessedTasks.length === 0 && (
              <View style={styles.emptyContainer}>
                <Text style={styles.emptyText}>
                  {activeTab === 'incomplete' ? t('task_list.empty') : t('task_list.no_tasks_completed')}
@@ -185,7 +192,7 @@ export const TaskViewPager: React.FC<TaskViewPagerProps> = ({
            )}
       </ScrollView>
     );
-  }, [memoizedPagesData, windowWidth, isSelecting, SELECTION_BAR_HEIGHT, activeTab, toggleTaskDone, isReordering, draggingFolder, noFolderName, moveFolderOrder, stopReordering, selectedItems, onLongPressSelectItem, sortMode, isTaskReorderMode, onTaskReorder, onFolderReorder, styles.emptyContainer, styles.emptyText, t, isTaskDragging, handleTaskDragStateChange]);
+  }, [baseProcessedTasks, windowWidth, isSelecting, SELECTION_BAR_HEIGHT, activeTab, toggleTaskDone, isReordering, draggingFolder, noFolderName, moveFolderOrder, stopReordering, selectedItems, onLongPressSelectItem, sortMode, isTaskReorderMode, onTaskReorder, onFolderReorder, styles.emptyContainer, styles.emptyText, t, isTaskDragging, handleTaskDragStateChange, folderOrder]);
 
   return (
     <PagerView
@@ -200,4 +207,4 @@ export const TaskViewPager: React.FC<TaskViewPagerProps> = ({
       {folderTabs.map((folder, index) => renderPageContent(folder.name, index))}
     </PagerView>
   );
-};
+});

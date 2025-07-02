@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next';
 import { FontSizeContext, FontSizeKey } from '@/context/FontSizeContext';
 import { createStyles } from '../styles';
 import { fontSizes } from '@/constants/fontSizes';
+import dayjs from 'dayjs';
 
 // ネイティブドラッグ&ドロップの準備
 
@@ -62,7 +63,7 @@ export interface Props {
   draggedItemFolderName?: any; // SharedValue<string>
 }
 
-export const TaskFolder: React.FC<Props> = ({
+export const TaskFolder = React.memo<Props>(({
   folderName,
   tasks,
   onToggleTaskDone,
@@ -107,6 +108,92 @@ export const TaskFolder: React.FC<Props> = ({
   const baseFontSize = fontSizes[fontSizeKey];
 
   const noFolderName = t('common.no_folder_name', 'フォルダなし');
+  
+  // ★ PERFORMANCE OPTIMIZATION: Individual task filtering and sorting with useMemo
+  const filteredAndSortedTasks = useMemo(() => {
+    // Step 1: Filter tasks for this folder
+    let filteredTasks = tasks.filter(task => (task.folder || noFolderName) === folderName);
+    
+    // Step 2: Apply tab filtering (incomplete/completed)
+    if (currentTab === 'completed') {
+      const completedDisplayItems: DisplayableTaskItem[] = [];
+      filteredTasks.forEach(task => {
+        if (task.isTaskFullyCompleted && !task.deadlineDetails?.repeatFrequency) {
+          completedDisplayItems.push({ 
+            ...task, 
+            keyId: task.id, 
+            displaySortDate: task.completedAt ? dayjs.utc(task.completedAt) : null 
+          });
+        } else if (task.deadlineDetails?.repeatFrequency && task.completedInstanceDates && task.completedInstanceDates.length > 0) {
+          task.completedInstanceDates.forEach(instanceDate => {
+            completedDisplayItems.push({ 
+              ...task, 
+              keyId: `${task.id}-${instanceDate}`, 
+              displaySortDate: dayjs.utc(instanceDate), 
+              isCompletedInstance: true, 
+              instanceDate: instanceDate 
+            });
+          });
+        }
+      });
+      return completedDisplayItems.sort((a, b) => (b.displaySortDate?.unix() || 0) - (a.displaySortDate?.unix() || 0));
+    } else {
+      // Incomplete tasks
+      const todayStartOfDayUtc = dayjs.utc().startOf('day');
+      filteredTasks = filteredTasks
+        .filter(task => {
+          if (task.isTaskFullyCompleted) return false;
+          if ((task.deadlineDetails as any)?.isPeriodSettingEnabled && (task.deadlineDetails as any)?.periodStartDate) {
+            const periodStartDateUtc = dayjs.utc((task.deadlineDetails as any).periodStartDate).startOf('day');
+            if (periodStartDateUtc.isAfter(todayStartOfDayUtc)) return false;
+          }
+          return true;
+        })
+        .map(task => ({ ...task, keyId: task.id }));
+    }
+    
+    // Step 3: Apply sorting
+    if (filteredTasks.length <= 1) return filteredTasks;
+    
+    return filteredTasks.sort((a, b) => {
+      if (currentTab === 'incomplete' && sortMode === 'deadline') {
+        const today = dayjs.utc().startOf('day');
+        const getCategory = (task: DisplayableTaskItem): number => {
+          const date = task.displaySortDate;
+          if (!date) return 3;
+          if (date.isBefore(today, 'day')) return 0;
+          if (date.isSame(today, 'day')) return 1;
+          return 2;
+        };
+        const categoryA = getCategory(a);
+        const categoryB = getCategory(b);
+        if (categoryA !== categoryB) return categoryA - categoryB;
+        if (categoryA === 3) return a.title.localeCompare(b.title);
+        const dateAVal = a.displaySortDate!;
+        const dateBVal = b.displaySortDate!;
+        if (dateAVal.isSame(dateBVal, 'day')) {
+          const timeEnabledA = a.deadlineDetails?.isTaskDeadlineTimeEnabled === true && !a.deadlineDetails?.repeatFrequency;
+          const timeEnabledB = b.deadlineDetails?.isTaskDeadlineTimeEnabled === true && !b.deadlineDetails?.repeatFrequency;
+          if (timeEnabledA && !timeEnabledB) return -1;
+          if (!timeEnabledA && timeEnabledB) return 1;
+        }
+        return dateAVal.unix() - dateBVal.unix();
+      }
+
+      if (sortMode === 'custom' && currentTab === 'incomplete') {
+        const orderA = a.customOrder ?? Infinity;
+        const orderB = b.customOrder ?? Infinity;
+        if (orderA !== orderB) {
+          if (orderA === Infinity) return 1;
+          if (orderB === Infinity) return -1;
+          return orderA - orderB;
+        }
+        return a.title.localeCompare(b.title);
+      }
+      
+      return a.title.localeCompare(b.title);
+    });
+  }, [tasks, folderName, noFolderName, currentTab, sortMode]);
   
   // Debug: Track isTaskReorderMode changes
   console.log('🔥 TaskFolder render - folderName:', folderName, 'isTaskReorderMode:', isTaskReorderMode);
@@ -201,7 +288,7 @@ export const TaskFolder: React.FC<Props> = ({
       )}
       
       {/* タスクリスト表示 */}
-      {tasks && tasks.length > 0 && (
+      {filteredAndSortedTasks && filteredAndSortedTasks.length > 0 && (
         <View
           style={{
             flex: 1,
@@ -212,7 +299,7 @@ export const TaskFolder: React.FC<Props> = ({
           {/* Enhanced FlatList with SafeGestureTaskItem */}
           <ReanimatedAnimated.FlatList
             key={`enhanced-${folderName}`}
-            data={pendingTasks || tasks}
+            data={pendingTasks || filteredAndSortedTasks}
             renderItem={({ item, index }) => {
               if (!item || !item.keyId) {
                 return null;
@@ -248,6 +335,11 @@ export const TaskFolder: React.FC<Props> = ({
               );
             }}
             keyExtractor={(item, index) => item?.keyId || `task-${index}`}
+            getItemLayout={(data, index) => ({
+              length: 80, // Fixed item height for better scroll performance
+              offset: 80 * index,
+              index,
+            })}
             scrollEnabled={isScrollEnabled}
             contentContainerStyle={{ 
               paddingTop: 8, 
@@ -264,7 +356,7 @@ export const TaskFolder: React.FC<Props> = ({
       )}
 
       {/* Empty state */}
-      {(!tasks || tasks.length === 0) && folderName && (
+      {(!filteredAndSortedTasks || filteredAndSortedTasks.length === 0) && folderName && (
         <View 
           style={{ 
             paddingVertical: 20, 
@@ -280,4 +372,4 @@ export const TaskFolder: React.FC<Props> = ({
 
     </View>
   );
-};
+});

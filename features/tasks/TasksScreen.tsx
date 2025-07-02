@@ -54,7 +54,7 @@ export default function TasksScreen() {
     isSelecting, selectedItems,
     setActiveTab, setSortMode, setSortModalVisible,
     setFolderTabLayouts,
-    memoizedPagesData,
+    baseProcessedTasks,
     handleFolderTabPress, handlePageSelected, handlePageScroll,
     handleSelectAll, handleDeleteSelected,
     handleRenameFolderSubmit, handleReorderSelectedFolder, openRenameModalForSelectedFolder,
@@ -172,7 +172,7 @@ export default function TasksScreen() {
           onLongPressSelectItem={onLongPressSelectItem}
           noFolderName={noFolderName}
           t={t}
-          memoizedPagesData={memoizedPagesData}
+          baseProcessedTasks={baseProcessedTasks.map(task => ({ ...task, keyId: task.id }))}
           sortMode={sortMode}
           isTaskReorderMode={logic.isTaskReorderMode}
           onTaskReorder={logic.createTaskReorderHandler}
@@ -306,12 +306,6 @@ export default function TasksScreen() {
               <TouchableOpacity onPress={() => handleSortOptionSelect('custom')} activeOpacity={0.7}>
                 <Text style={[styles.modalOption, {color: sortMode === 'custom' ? subColor : (isDark ? '#E0E0E0' : '#222222'), fontWeight: sortMode === 'custom' ? '600' : '400'}]}>
                   カスタム順
-                </Text>
-              </TouchableOpacity>
-               <View style={{height: StyleSheet.hairlineWidth, backgroundColor: isDark? '#444': '#DDD'}}/>
-              <TouchableOpacity onPress={() => handleSortOptionSelect('priority')} activeOpacity={0.7}>
-                <Text style={[styles.modalOption, {color: sortMode === 'priority' ? subColor : (isDark ? '#E0E0E0' : '#222222'), fontWeight: sortMode === 'priority' ? '600' : '400'}]}>
-                  優先順
                 </Text>
               </TouchableOpacity>
               <View style={{height: StyleSheet.hairlineWidth, backgroundColor: isDark? '#444': '#DDD', marginTop: 10, marginBottom: 0 }}/>

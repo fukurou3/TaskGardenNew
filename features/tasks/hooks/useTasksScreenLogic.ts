@@ -23,11 +23,7 @@ export type ActiveTab = 'incomplete' | 'completed';
 export type FolderTab = { name: string; label: string };
 export type FolderTabLayout = { x: number; width: number; index: number };
 
-export type MemoizedPageData = {
-  foldersToRender: string[];
-  tasksByFolder: Map<string, DisplayableTaskItem[]>;
-  allTasksForPage: DisplayableTaskItem[];
-};
+// ★ REMOVED: MemoizedPageData type no longer needed with optimized architecture
 
 export const useTasksScreenLogic = () => {
   const router = useRouter();
@@ -419,141 +415,8 @@ export const useTasksScreenLogic = () => {
     });
   }, [tasksStabilityKeys.length, tasksStabilityKeys.ids, tasksStabilityKeys.completed, tasksStabilityKeys.customOrders]);
 
-  const memoizedPagesData = useMemo<Map<string, MemoizedPageData>>(() => {
-    const pagesData = new Map<string, MemoizedPageData>();
-
-    const getTasksToDisplayForPage = (pageFolderName: string): DisplayableTaskItem[] => {
-        let filteredTasks = baseProcessedTasks;
-        if (pageFolderName !== 'all') {
-            filteredTasks = filteredTasks.filter(task => (task.folder || noFolderName) === pageFolderName);
-        }
-
-        if (activeTab === 'completed') {
-            const completedDisplayItems: DisplayableTaskItem[] = [];
-            filteredTasks.forEach(task => {
-                if (task.isTaskFullyCompleted && !task.deadlineDetails?.repeatFrequency) {
-                    completedDisplayItems.push({ ...task, keyId: task.id, displaySortDate: task.completedAt ? dayjs.utc(task.completedAt) : null });
-                } else if (task.deadlineDetails?.repeatFrequency && task.completedInstanceDates && task.completedInstanceDates.length > 0) {
-                    task.completedInstanceDates.forEach(instanceDate => {
-                        completedDisplayItems.push({ ...task, keyId: `${task.id}-${instanceDate}`, displaySortDate: dayjs.utc(instanceDate), isCompletedInstance: true, instanceDate: instanceDate });
-                    });
-                }
-            });
-            return completedDisplayItems.sort((a, b) => (b.displaySortDate?.unix() || 0) - (a.displaySortDate?.unix() || 0));
-        } else {
-            const todayStartOfDayUtc = dayjs.utc().startOf('day');
-            return filteredTasks
-                .filter(task => {
-                    if (task.isTaskFullyCompleted) return false;
-                    if ((task.deadlineDetails as any)?.isPeriodSettingEnabled && (task.deadlineDetails as any)?.periodStartDate) {
-                        const periodStartDateUtc = dayjs.utc((task.deadlineDetails as any).periodStartDate).startOf('day');
-                        if (periodStartDateUtc.isAfter(todayStartOfDayUtc)) return false;
-                    }
-                    return true;
-                })
-                .map(task => ({ ...task, keyId: task.id }));
-        }
-    };
-    
-    folderTabs.forEach(tab => {
-        const pageFolderName = tab.name;
-        const tasksForPage = getTasksToDisplayForPage(pageFolderName);
-        let foldersToRenderOnThisPage: string[];
-        if (pageFolderName === 'all') {
-            const allFolderNamesInTasksOnPage = Array.from(new Set(tasksForPage.map(t => t.folder || noFolderName)));
-            const combinedFolders = new Set([...folderOrder, ...allFolderNamesInTasksOnPage]);
-            const ordered = folderOrder.filter(name => combinedFolders.has(name) && name !== noFolderName);
-            const unordered = [...combinedFolders].filter(name => !ordered.includes(name) && name !== noFolderName && name !== 'all').sort((a, b) => a.localeCompare(b));
-            
-            foldersToRenderOnThisPage = [...ordered, ...unordered];
-            
-            if (combinedFolders.has(noFolderName) && tasksForPage.some(t => (t.folder || noFolderName) === noFolderName)) {
-                foldersToRenderOnThisPage.push(noFolderName);
-            }
-        } else {
-            foldersToRenderOnThisPage = [pageFolderName];
-        }
-
-        const tasksByFolder = new Map<string, DisplayableTaskItem[]>();
-
-        foldersToRenderOnThisPage.forEach(folderName => {
-            const tasksInThisFolder = tasksForPage.filter(t => (t.folder || noFolderName) === folderName);
-            if (activeTab === 'completed' && tasksInThisFolder.length === 0) {
-                return;
-            }
-
-            // パフォーマンス最適化: ソート前に長さをチェック
-            if (tasksInThisFolder.length === 0) {
-                return;
-            }
-            if (tasksInThisFolder.length === 1) {
-                tasksByFolder.set(folderName, tasksInThisFolder);
-                return;
-            }
-
-            // 最適化されたソート処理
-            const sortedFolderTasks = tasksInThisFolder.sort((a, b) => {
-                if (activeTab === 'incomplete' && sortMode === 'deadline') {
-                  const today = dayjs.utc().startOf('day');
-                  const getCategory = (task: DisplayableTaskItem): number => {
-                    const date = task.displaySortDate;
-                    if (!date) return 3;
-                    if (date.isBefore(today, 'day')) return 0;
-                    if (date.isSame(today, 'day')) return 1;
-                    return 2;
-                  };
-                  const categoryA = getCategory(a);
-                  const categoryB = getCategory(b);
-                  if (categoryA !== categoryB) return categoryA - categoryB;
-                  if (categoryA === 3) return a.title.localeCompare(b.title);
-                  const dateAVal = a.displaySortDate!;
-                  const dateBVal = b.displaySortDate!;
-                  if (dateAVal.isSame(dateBVal, 'day')) {
-                      const timeEnabledA = a.deadlineDetails?.isTaskDeadlineTimeEnabled === true && !a.deadlineDetails?.repeatFrequency;
-                      const timeEnabledB = b.deadlineDetails?.isTaskDeadlineTimeEnabled === true && !b.deadlineDetails?.repeatFrequency;
-                      if (timeEnabledA && !timeEnabledB) return -1;
-                      if (!timeEnabledA && timeEnabledB) return 1;
-                  }
-                  return dateAVal.unix() - dateBVal.unix();
-                }
-
-                if (sortMode === 'custom' && activeTab === 'incomplete') {
-                    const folderA = a.folder || noFolderName;
-                    const folderB = b.folder || noFolderName;
-                    
-                    // 同じフォルダ内でのcustomOrder比較
-                    if (folderA === folderB) {
-                        const orderA = a.customOrder ?? Infinity;
-                        const orderB = b.customOrder ?? Infinity;
-                        if (orderA !== orderB) {
-                            if (orderA === Infinity) return 1;
-                            if (orderB === Infinity) return -1;
-                            return orderA - orderB;
-                        }
-                        // customOrderが同じ場合はタイトルでソート
-                        return a.title.localeCompare(b.title);
-                    }
-                }
-                return a.title.localeCompare(b.title);
-            });
-            if (sortedFolderTasks.length > 0) {
-                tasksByFolder.set(folderName, sortedFolderTasks);
-            }
-        });
-
-        if (activeTab === 'completed') {
-            foldersToRenderOnThisPage = foldersToRenderOnThisPage.filter(name => tasksByFolder.has(name));
-        }
-
-        pagesData.set(pageFolderName, {
-            foldersToRender: foldersToRenderOnThisPage,
-            tasksByFolder,
-            allTasksForPage: tasksForPage,
-        });
-    });
-
-    return pagesData;
-  }, [baseProcessedTasks, activeTab, sortMode, folderOrder, noFolderName, folderTabs]);
+  // ★ PERFORMANCE OPTIMIZATION: memoizedPagesData removed
+  // Data processing now handled individually by each TaskFolder component
 
   // ★ タブタップ時の処理を修正
   const handleFolderTabPress = useCallback((_folderName: string, index: number) => {
@@ -871,7 +734,7 @@ export const useTasksScreenLogic = () => {
   }, [tasks, noFolderName, getBaseOrderForFolder]);
 
   // CustomOrderのクリーンアップと正規化（tasksを依存から除外してループを防ぐ）
-  const normalizeCustomOrdersRef = useRef<(currentTasks: Task[]) => Promise<void>>();
+  const normalizeCustomOrdersRef = useRef<(currentTasks: Task[]) => Promise<void>>(undefined);
   
   const normalizeCustomOrders = useCallback(async (currentTasks: Task[]) => {
     const updatedTasks = [...currentTasks];
@@ -1094,13 +957,12 @@ export const useTasksScreenLogic = () => {
     if (currentPending) {
       return currentPending;
     }
-    // Fallback to current displayable tasks
-    const pageData = memoizedPagesData.get(selectedFolderTabName);
-    if (pageData) {
-      return pageData.tasksByFolder.get(folderName) || [];
-    }
-    return [];
-  }, [pendingTasksByFolder, memoizedPagesData, selectedFolderTabName]);
+    // Fallback to filtering baseProcessedTasks for this folder
+    return baseProcessedTasks
+      .filter(task => (task.folder || noFolderName) === folderName)
+      .filter(task => activeTab === 'completed' ? task.isTaskFullyCompleted : !task.isTaskFullyCompleted)
+      .map(task => ({ ...task, keyId: task.id }));
+  }, [pendingTasksByFolder, baseProcessedTasks, noFolderName, activeTab]);
 
   // Utility to update pending tasks for a folder
   const updatePendingTasks = useCallback((folderName: string, newTasks: DisplayableTaskItem[]) => {
@@ -1140,29 +1002,31 @@ export const useTasksScreenLogic = () => {
     
     // ✅ 修正: 全フォルダのpendingTasksを初期化
     console.log('🔥 Initializing pending tasks for all folders...');
-    const pageData = memoizedPagesData.get(selectedFolderTabName);
-    if (pageData) {
-      // 全フォルダのタスクを初期化
-      const newPendingTasksByFolder = new Map<string, DisplayableTaskItem[]>();
-      const newHasChangesByFolder = new Map<string, boolean>();
+    
+    // Get all folder names from current tasks
+    const allFolderNames = Array.from(new Set(baseProcessedTasks.map(t => t.folder || noFolderName)));
+    const newPendingTasksByFolder = new Map<string, DisplayableTaskItem[]>();
+    const newHasChangesByFolder = new Map<string, boolean>();
+    
+    for (const currentFolderName of allFolderNames) {
+      const folderTasks = baseProcessedTasks
+        .filter(task => (task.folder || noFolderName) === currentFolderName)
+        .filter(task => activeTab === 'completed' ? task.isTaskFullyCompleted : !task.isTaskFullyCompleted)
+        .map(task => ({ ...task, keyId: task.id }));
       
-      for (const [currentFolderName, folderTasks] of pageData.tasksByFolder.entries()) {
-        if (folderTasks.length > 0) {
-          newPendingTasksByFolder.set(currentFolderName, [...folderTasks]);
-          newHasChangesByFolder.set(currentFolderName, false);
-          console.log(`🔥 Initialized pending tasks for folder "${currentFolderName}" with ${folderTasks.length} tasks`);
-        }
+      if (folderTasks.length > 0) {
+        newPendingTasksByFolder.set(currentFolderName, [...folderTasks]);
+        newHasChangesByFolder.set(currentFolderName, false);
+        console.log(`🔥 Initialized pending tasks for folder "${currentFolderName}" with ${folderTasks.length} tasks`);
       }
-      
-      setPendingTasksByFolder(newPendingTasksByFolder);
-      setHasChangesByFolder(newHasChangesByFolder);
-      
-      console.log('🔥 All pending tasks initialized successfully');
-      console.log('🔥 Initialized folders:', Array.from(newPendingTasksByFolder.keys()));
-    } else {
-      console.error('🔥 No page data found for selectedFolderTabName:', selectedFolderTabName);
     }
-  }, [isTaskReorderMode, selectionHook.isSelecting, memoizedPagesData, selectedFolderTabName]);
+    
+    setPendingTasksByFolder(newPendingTasksByFolder);
+    setHasChangesByFolder(newHasChangesByFolder);
+    
+    console.log('🔥 All pending tasks initialized successfully');
+    console.log('🔥 Initialized folders:', Array.from(newPendingTasksByFolder.keys()));
+  }, [isTaskReorderMode, selectionHook.isSelecting, baseProcessedTasks, noFolderName, activeTab]);
 
   // Drag update handler (centralized)
   const handleDragUpdate = useCallback((translationY: number, itemId: string, folderName: string) => {
@@ -1352,7 +1216,7 @@ export const useTasksScreenLogic = () => {
     isSelecting: selectionHook.isSelecting,
     selectedItems: selectionHook.selectedItems,
     isRefreshing,
-    memoizedPagesData,
+    baseProcessedTasks, // ★ Replace memoizedPagesData with raw processed tasks
     setActiveTab, setSelectedFolderTabName, setSortMode, setSortModalVisible,
     setIsReordering, setDraggingFolder, setRenameModalVisible, setRenameTarget,
     setFolderTabLayouts,
