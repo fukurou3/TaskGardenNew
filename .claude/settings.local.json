@@ -37,7 +37,8 @@
       "Bash(timeout 30s npx expo export --platform android)",
       "Bash(npx expo export:*)",
       "Bash(npm ls:*)",
-      "Bash(killall:*)"
+      "Bash(killall:*)",
+      "WebFetch(domain:docs.swmansion.com)"
     ],
     "deny": []
   }
