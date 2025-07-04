@@ -38,7 +38,9 @@
       "Bash(npx expo export:*)",
       "Bash(npm ls:*)",
       "Bash(killall:*)",
-      "WebFetch(domain:docs.swmansion.com)"
+      "WebFetch(domain:docs.swmansion.com)",
+      "Bash(timeout 30 npx expo start)",
+      "Bash(timeout 20 npx expo start)"
     ],
     "deny": []
   }

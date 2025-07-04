@@ -73,7 +73,6 @@ export const useTaskStore = create<TaskState>((set, get) => ({
 
   // Actions
   setTasks: (tasks) => {
-    set({ tasks });
     // Update computed baseProcessedTasks
     const baseProcessedTasks = tasks.map(task => {
       const displayDateUtc = task.deadlineDetails?.repeatFrequency && task.deadlineDetails.repeatStartDate
@@ -106,7 +105,9 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       }
       return { ...task, displaySortDate: displayDateUtc, isTaskFullyCompleted };
     });
-    set({ baseProcessedTasks });
+    
+    // Update both tasks and baseProcessedTasks in single set call
+    set({ tasks, baseProcessedTasks });
   },
 
   setFolderOrder: (folderOrder) => set({ folderOrder }),

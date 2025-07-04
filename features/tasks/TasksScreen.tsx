@@ -1,5 +1,5 @@
 // app/features/tasks/TasksScreen.tsx
-import React, { useContext, useState, useCallback } from 'react';
+import React, { useContext, useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -67,8 +67,13 @@ export default function TasksScreen() {
     tasks,
   } = logic;
 
-  // Debug: Track reorder mode state
-  console.log('🔥 TasksScreen render - logic.isTaskReorderMode:', logic.isTaskReorderMode, 'taskReorderState.isReorderMode:', taskReorderState.isReorderMode);
+  // ✅ Debug: Track reorder mode state (commented out to prevent infinite loop)
+  // console.log('🔥 TasksScreen render - logic.isTaskReorderMode:', logic.isTaskReorderMode, 'taskReorderState.isReorderMode:', taskReorderState.isReorderMode);
+
+  // ✅ baseProcessedTasksWithKeyIdをメモ化して不要な再レンダリングを防ぐ
+  const baseProcessedTasksWithKeyId = useMemo(() => {
+    return baseProcessedTasks.map(task => ({ ...task, keyId: task.id }));
+  }, [baseProcessedTasks]);
 
 
   const handleSortOptionSelect = (newSortMode: SortMode) => {
@@ -172,7 +177,7 @@ export default function TasksScreen() {
           onLongPressSelectItem={onLongPressSelectItem}
           noFolderName={noFolderName}
           t={t}
-          baseProcessedTasks={baseProcessedTasks.map(task => ({ ...task, keyId: task.id }))}
+          baseProcessedTasks={baseProcessedTasksWithKeyId}
           sortMode={sortMode}
           isTaskReorderMode={logic.isTaskReorderMode}
           onTaskReorder={logic.createTaskReorderHandler}

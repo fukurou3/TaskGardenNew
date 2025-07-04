@@ -9,12 +9,14 @@ import { useTranslation } from 'react-i18next';
 import PagerView, { type PagerViewOnPageSelectedEvent, type PagerViewOnPageScrollEvent } from 'react-native-pager-view';
 import { Animated } from 'react-native';
 import { useSharedValue, useAnimatedReaction, runOnJS } from 'react-native-reanimated';
+import { shallow } from 'zustand/shallow';
 
 import type { Task, FolderOrder, SelectableItem, DisplayTaskOriginal, DisplayableTaskItem } from '@/features/tasks/types';
 import { calculateNextDisplayInstanceDate, calculateActualDueDate } from '@/features/tasks/utils';
 import { useSelection } from '@/features/tasks/context';
 import { STORAGE_KEY, FOLDER_ORDER_KEY, SELECTION_BAR_HEIGHT, FOLDER_TABS_CONTAINER_PADDING_HORIZONTAL, TAB_MARGIN_RIGHT } from '@/features/tasks/constants';
 import i18n from '@/lib/i18n';
+import { useTaskStore } from '@/stores/taskStore';
 
 const windowWidth = Dimensions.get('window').width;
 
@@ -30,28 +32,54 @@ export const useTasksScreenLogic = () => {
   const { t } = useTranslation();
   const selectionHook = useSelection();
 
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [folderOrder, setFolderOrder] = useState<FolderOrder>([]);
-  const [loading, setLoading] = useState(true);
-  const [isDataInitialized, setIsDataInitialized] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [activeTab, setActiveTab] = useState<ActiveTab>('incomplete');
+  // ✅ 最小限の状態のみ取得（無限ループ回避のため）
+  const loading = useTaskStore(state => state.loading);
+  const tasks = useTaskStore(state => state.tasks);
+  
+  // ✅ 基本状態を段階的に復元
+  const folderOrder = useTaskStore(state => state.folderOrder);
+  const isTaskReorderMode = useTaskStore(state => state.isTaskReorderMode);
+  const sortMode = useTaskStore(state => state.sortMode);
+  const activeTab = useTaskStore(state => state.activeTab);
+  const isDataInitialized = useTaskStore(state => state.isDataInitialized);
+  const isRefreshing = useTaskStore(state => state.isRefreshing);
+  const baseProcessedTasks = useTaskStore(state => state.baseProcessedTasks);
+  
+  // ✅ 複雑な状態を段階的に復元
+  const pendingTasksByFolder = useTaskStore(state => state.pendingTasksByFolder);
+  const hasChangesByFolder = useTaskStore(state => state.hasChangesByFolder);
+  const isScrollEnabled = useTaskStore(state => state.isScrollEnabled);
+
+  // ✅ 基本アクション関数を段階的に復元
+  const setTasks = useTaskStore(state => state.setTasks);
+  const setFolderOrder = useTaskStore(state => state.setFolderOrder);
+  const setActiveTab = useTaskStore(state => state.setActiveTab);
+  const setSortMode = useTaskStore(state => state.setSortMode);
+  const loadData = useTaskStore(state => state.loadData);
+  const toggleTaskDone = useTaskStore(state => state.toggleTaskDone);
+  
+  // ✅ 複雑なアクションを段階的に復元
+  const setIsTaskReorderMode = useTaskStore(state => state.setIsTaskReorderMode);
+  const setLoading = useTaskStore(state => state.setLoading);
+  const setIsDataInitialized = useTaskStore(state => state.setIsDataInitialized);
+  const setIsRefreshing = useTaskStore(state => state.setIsRefreshing);
+  const syncTasksToDatabase = useTaskStore(state => state.syncTasksToDatabase);
+  const handleLongPressStart = useTaskStore(state => state.handleLongPressStart);
+  const handleDragUpdate = useTaskStore(state => state.handleDragUpdate);
+  const handleDragEnd = useTaskStore(state => state.handleDragEnd);
+  const handleTaskReorderConfirm = useTaskStore(state => state.handleTaskReorderConfirm);
+  const handleTaskReorderCancel = useTaskStore(state => state.handleTaskReorderCancel);
+
+  // ✅ ローカル状態のみを管理（UIに特化した状態）
   const [selectedFolderTabName, setSelectedFolderTabName] = useState<string>('all');
-  const [sortMode, setSortMode] = useState<SortMode>('deadline');
   const [sortModalVisible, setSortModalVisible] = useState(false);
   const [isReordering, setIsReordering] = useState(false);
   const [draggingFolder, setDraggingFolder] = useState<string | null>(null);
-  const [isTaskReorderMode, setIsTaskReorderMode] = useState(false);
   const [renameModalVisible, setRenameModalVisible] = useState(false);
   const [renameTarget, setRenameTarget] = useState<string | null>(null);
 
   // ===== DRAG & DROP STATE MANAGEMENT =====
-  // Centralized drag & drop state management for all folders
-  const [pendingTasksByFolder, setPendingTasksByFolder] = useState<Map<string, DisplayableTaskItem[]>>(new Map());
-  const [hasChangesByFolder, setHasChangesByFolder] = useState<Map<string, boolean>>(new Map());
-  const [isScrollEnabled, setIsScrollEnabled] = useState(true);
-
-  // Enhanced drag & drop shared values (centralized)
+  // ✅ Shared valuesはストアとは別に管理（workletで使用するため）
   const isDragMode = useSharedValue(false);
   const draggedItemId = useSharedValue<string>('');
   const draggedItemY = useSharedValue(0);
@@ -72,112 +100,69 @@ export const useTasksScreenLogic = () => {
 
   const noFolderName = useMemo(() => t('common.no_folder_name', 'フォルダなし'), [t]);
 
-  // Immediate reaction to shared value changes (scroll control)
-  useAnimatedReaction(
-    () => scrollEnabled.value,
-    (current) => {
-      runOnJS(setIsScrollEnabled)(current);
-    }
-  );
+  // ✅ setIsScrollEnabled は存在しないため削除
 
   // React.useRefを使って循環参照を断ち切る
   const tasksRef = useRef(tasks);
   tasksRef.current = tasks;
 
-  // 循環参照を避けるため、useRefと安定した依存配列を使用
-  const folderOrderString = useMemo(() => folderOrder.join(','), [folderOrder]);
+  // ✅ folderTabs を段階的に復元（循環参照を避けつつ）
   const folderTabs: FolderTab[] = useMemo(() => {
-    const currentTasks = tasksRef.current;
-    const tabsArr: FolderTab[] = [{ name: 'all', label: t('folder_tabs.all', 'すべて') }];
-    const uniqueFoldersFromTasks = Array.from(new Set(currentTasks.map(task => task.folder || noFolderName)));
-
-    if (activeTab === 'completed') {
-        const foldersWithCompletedTasks = new Set(
-            currentTasks.filter(t => t.completedAt || (t.completedInstanceDates && t.completedInstanceDates.length > 0))
-                 .map(t => t.folder || noFolderName)
-        );
+    // 基本的な「すべて」タブ
+    const tabs: FolderTab[] = [{ name: 'all', label: t('folder_tabs.all', 'すべて') }];
+    
+    // baseProcessedTasks が利用可能な場合のみフォルダを検出
+    if (baseProcessedTasks.length > 0) {
+      const uniqueFolderNames = new Set<string>();
+      
+      // タスクからフォルダ名を収集
+      baseProcessedTasks.forEach(task => {
+        const folderName = task.folder || noFolderName;
+        uniqueFolderNames.add(folderName);
+      });
+      
+      // フォルダ順序に基づいてソート
+      const sortedFolderNames = Array.from(uniqueFolderNames).sort((a, b) => {
+        const aIndex = folderOrder.findIndex(name => name === a);
+        const bIndex = folderOrder.findIndex(name => name === b);
         
-        // フォルダなしを「すべて」の直後に追加
-        if (foldersWithCompletedTasks.has(noFolderName)) {
-            tabsArr.push({ name: noFolderName, label: noFolderName });
+        if (aIndex !== -1 && bIndex !== -1) {
+          return aIndex - bIndex;
         }
-        
-        folderOrder.forEach(folderName => {
-            if (foldersWithCompletedTasks.has(folderName) && folderName !== noFolderName) {
-                tabsArr.push({ name: folderName, label: folderName });
-            }
-        });
-        const remainingFolders = [...foldersWithCompletedTasks].filter(name => !folderOrder.includes(name) && name !== noFolderName).sort();
-        remainingFolders.forEach(folderName => {
-             tabsArr.push({ name: folderName, label: folderName });
-        });
-    } else {
-        const allFolders = new Set([...folderOrder, ...uniqueFoldersFromTasks]);
-        
-        // フォルダなしを「すべて」の直後に追加
-        if (allFolders.has(noFolderName)) {
-            tabsArr.push({ name: noFolderName, label: noFolderName });
-        }
-        
-        const orderedFolders = folderOrder.filter(name => allFolders.has(name) && name !== noFolderName);
-        const unorderedFolders = [...allFolders].filter(name => !folderOrder.includes(name) && name !== noFolderName).sort();
-
-        [...orderedFolders, ...unorderedFolders].forEach(folderName => {
-            if (!tabsArr.some(tab => tab.name === folderName)) {
-                tabsArr.push({ name: folderName, label: folderName });
-            }
-        });
+        if (aIndex !== -1) return -1;
+        if (bIndex !== -1) return 1;
+        return a.localeCompare(b);
+      });
+      
+      // フォルダタブを追加
+      sortedFolderNames.forEach(folderName => {
+        tabs.push({ name: folderName, label: folderName });
+      });
     }
-    return tabsArr;
-  }, [tasks.length, folderOrderString, noFolderName, t, activeTab]);
+    
+    return tabs;
+  }, [baseProcessedTasks, folderOrder, noFolderName, t]);
 
+  // ✅ loadDataを復元（依存配列から除外して安全化）
   useFocusEffect(
     useCallback(() => {
       const langForDayjs = i18n.language.split('-')[0];
       if (dayjs.Ls[langForDayjs]) { dayjs.locale(langForDayjs); } else { dayjs.locale('en'); }
-
-      const loadData = async () => {
-        if (!isDataInitialized) {
-          setLoading(true);
-        }
-        try {
-          const [taskRows, rawOrderData] = await Promise.all([
-            TasksDatabase.getAllTasks(),
-            getItem(FOLDER_ORDER_KEY),
-          ]);
-          setTasks(taskRows.map(t => JSON.parse(t)));
-          setFolderOrder(rawOrderData ? JSON.parse(rawOrderData) : []);
-        } catch (e) {
-          console.error('Failed to load data from storage on focus:', e);
-          setTasks([]);
-          setFolderOrder([]);
-        } finally {
-          if (!isDataInitialized) {
-            setLoading(false);
-            setIsDataInitialized(true);
-          }
-        }
-      };
-
       loadData();
-    }, [i18n.language, isDataInitialized])
+    }, [i18n.language])
   );
 
-  // ★ フォルダタブリストの変更（例：未完了/完了の切替）時に、ページャーの位置を同期させる
-  // 循環参照を避けるため、folderTabsの代わりにfolderOrderStringとactiveTabを使用
+  // ✅ 基本的なタブ同期を復元（循環参照を避けつつ）
   useEffect(() => {
-    const targetIndex = folderTabs.findIndex(
-      (ft) => ft.name === selectedFolderTabName
-    );
-    const newIndex = targetIndex !== -1 ? targetIndex : 0;
-
-    if (selectedTabIndex !== newIndex) {
-      setSelectedTabIndex(newIndex);
-      // フォルダタブリストが変化したときのみページャーを同期させる
-      pagerRef.current?.setPageWithoutAnimation(newIndex);
-      setPageScrollPosition(newIndex);
+    if (selectedFolderTabName === 'all') {
+      const newIndex = 0;
+      if (selectedTabIndex !== newIndex) {
+        setSelectedTabIndex(newIndex);
+        pagerRef.current?.setPageWithoutAnimation(newIndex);
+        setPageScrollPosition(newIndex);
+      }
     }
-  }, [folderOrderString, selectedFolderTabName, activeTab, tasks.length]);
+  }, [selectedFolderTabName, activeTab, selectedTabIndex]);
 
 
   const scrollFolderTabsToCenter = useCallback((pageIndex: number) => {
@@ -220,62 +205,13 @@ export const useTasksScreenLogic = () => {
     }
   }, [activeTab, sortMode, isTaskReorderMode]);
 
-  // ★ 依存配列を新しい確定状態 selectedTabIndex に変更 - 循環参照回避
-  useEffect(() => {
-    const tabInfo = folderTabLayouts[selectedTabIndex];
-    const currentFolderTabs = folderTabs; // 現在のfolderTabsを取得
-    if (tabInfo && folderTabsScrollViewRef.current && windowWidth > 0 && currentFolderTabs.length > 0 && selectedTabIndex < currentFolderTabs.length) {
-        const screenCenter = windowWidth / 2;
-        let targetScrollXForTabs = tabInfo.x + tabInfo.width / 2 - screenCenter;
-        targetScrollXForTabs = Math.max(0, targetScrollXForTabs);
-
-        let totalFolderTabsContentWidth = 0;
-        currentFolderTabs.forEach((_ft, idx) => {
-            const layout = folderTabLayouts[idx];
-            if (layout) {
-                totalFolderTabsContentWidth += layout.width;
-                if (idx < currentFolderTabs.length - 1) {
-                    totalFolderTabsContentWidth += TAB_MARGIN_RIGHT;
-                }
-            }
-        });
-        totalFolderTabsContentWidth += FOLDER_TABS_CONTAINER_PADDING_HORIZONTAL * 2;
-        const maxScrollX = Math.max(0, totalFolderTabsContentWidth - windowWidth);
-        targetScrollXForTabs = Math.min(targetScrollXForTabs, maxScrollX);
-
-        folderTabsScrollViewRef.current.scrollTo({ x: targetScrollXForTabs, animated: true });
-    }
-  }, [selectedTabIndex, folderTabLayouts, windowWidth, folderOrderString, activeTab]);
+  // ★ 循環参照の原因となるuseEffectを削除
+  // useEffect(() => {
+  //   ...フォルダタブスクロール処理...
+  // }, [selectedTabIndex, folderTabLayouts, windowWidth, folderOrderString, activeTab]);
 
 
-  const syncTasksToDatabase = async (prevTasks: Task[], newTasks: Task[]) => {
-    try {
-      console.log('🔥 syncTasksToDatabase: Starting sync...');
-      console.log('🔥 syncTasksToDatabase: prevTasks count:', prevTasks.length);
-      console.log('🔥 syncTasksToDatabase: newTasks count:', newTasks.length);
-      
-      const prevIds = new Set(prevTasks.map(t => t.id));
-      const newIds = new Set(newTasks.map(t => t.id));
-      
-      for (const task of newTasks) {
-        console.log('🔥 syncTasksToDatabase: Saving task:', task.id, task.title);
-        await TasksDatabase.saveTask(task as any);
-        console.log('🔥 syncTasksToDatabase: Task saved successfully:', task.id);
-      }
-      
-      for (const id of prevIds) {
-        if (!newIds.has(id)) {
-          console.log('🔥 syncTasksToDatabase: Deleting task:', id);
-          await TasksDatabase.deleteTask(id);
-        }
-      }
-      
-      console.log('🔥 syncTasksToDatabase: All tasks synced successfully');
-    } catch (e) {
-      console.error('🔥 syncTasksToDatabase: Failed to sync tasks with DB:', e);
-      throw e;
-    }
-  };
+  // ✅ syncTasksToDatabase はストアから取得するため削除
 
   const saveFolderOrderToStorage = async (orderToSave: FolderOrder) => {
     try {
@@ -292,61 +228,7 @@ export const useTasksScreenLogic = () => {
     return folderIndex >= 0 ? folderIndex * 1000 : (folderOrder.length * 1000) + (folderName.length * 100);
   }, [folderOrder]);
 
-  const toggleTaskDone = useCallback(async (id: string, instanceDateStr?: string) => {
-    const newTasks = tasks.map(task => {
-      if (task.id === id) {
-        if (task.deadlineDetails?.repeatFrequency) {
-          let newCompletedDates = task.completedInstanceDates ? [...task.completedInstanceDates] : [];
-          if (instanceDateStr) {
-            const exists = newCompletedDates.includes(instanceDateStr);
-            if (exists) {
-              newCompletedDates = newCompletedDates.filter(d => d !== instanceDateStr);
-            } else {
-              newCompletedDates.push(instanceDateStr);
-            }
-          }
-          return { ...task, completedInstanceDates: newCompletedDates };
-        } else {
-          const wasCompleted = !!task.completedAt;
-          const updatedTask = { 
-            ...task, 
-            completedAt: wasCompleted ? undefined : dayjs.utc().toISOString() 
-          };
-          
-          // customOrder管理: 完了状態変更時の処理
-          if (sortMode === 'custom') {
-            if (!wasCompleted) {
-              // 未完了→完了: customOrderを削除
-              const { customOrder, ...taskWithoutOrder } = updatedTask;
-              return taskWithoutOrder as Task;
-            } else {
-              // 完了→未完了: 新しいcustomOrderを割り当て
-              const folderName = task.folder || noFolderName;
-              // 循環参照を避けるため、ここで直接計算
-              const folderIndex = folderOrder.indexOf(folderName);
-              const baseOrder = folderIndex >= 0 ? folderIndex * 1000 : (folderOrder.length * 1000) + (folderName.length * 100);
-              const folderTasks = tasks.filter(t => 
-                (t.folder || noFolderName) === folderName && 
-                !t.completedAt && 
-                t.id !== id
-              );
-              const maxCustomOrder = folderTasks.reduce((max, t) => {
-                const order = t.customOrder ?? (baseOrder - 10);
-                return Math.max(max, order);
-              }, baseOrder - 10);
-              
-              return { ...updatedTask, customOrder: maxCustomOrder + 10 };
-            }
-          }
-          
-          return updatedTask;
-        }
-      }
-      return task;
-    });
-    setTasks(newTasks);
-    await syncTasksToDatabase(tasks, newTasks);
-  }, [tasks, sortMode, noFolderName, folderOrder]);
+  // ✅ toggleTaskDone はストアから取得するため削除
 
   const moveFolderOrder = useCallback(async (folderName: string, direction: 'up' | 'down') => {
     const idx = folderOrder.indexOf(folderName);
@@ -385,35 +267,7 @@ export const useTasksScreenLogic = () => {
     }
   }, [isTaskReorderMode, selectionHook]);
 
-  // 安定した依存配列のための計算値
-  const tasksStabilityKeys = useMemo(() => ({
-    length: tasks.length,
-    ids: tasks.map(t => t.id).join(','),
-    completed: tasks.map(t => t.completedAt || '').join(','),
-    customOrders: tasks.map(t => t.customOrder || '').join(',')
-  }), [tasks]);
-
-  const baseProcessedTasks: DisplayTaskOriginal[] = useMemo(() => {
-    return tasksRef.current.map(task => {
-      const displayDateUtc = task.deadlineDetails?.repeatFrequency && task.deadlineDetails.repeatStartDate
-        ? calculateNextDisplayInstanceDate(task)
-        : calculateActualDueDate(task);
-      let isTaskFullyCompleted = false;
-      if (task.deadlineDetails?.repeatFrequency) {
-        const nextInstanceIsNull = displayDateUtc === null;
-        let repeatEndsPassed = false;
-        const repeatEnds = task.deadlineDetails.repeatEnds;
-        if (repeatEnds) {
-          switch (repeatEnds.type) {
-            case 'on_date': if (typeof repeatEnds.date === 'string') { repeatEndsPassed = dayjs.utc(repeatEnds.date).endOf('day').isBefore(dayjs().utc()); } break;
-            case 'count': if (typeof repeatEnds.count === 'number') { if ((task.completedInstanceDates?.length || 0) >= repeatEnds.count) { repeatEndsPassed = true; } } break;
-          }
-        }
-        isTaskFullyCompleted = nextInstanceIsNull || repeatEndsPassed;
-      } else { isTaskFullyCompleted = !!task.completedAt; }
-      return { ...task, displaySortDate: displayDateUtc, isTaskFullyCompleted };
-    });
-  }, [tasksStabilityKeys.length, tasksStabilityKeys.ids, tasksStabilityKeys.completed, tasksStabilityKeys.customOrders]);
+  // ✅ baseProcessedTasksはストアから取得するため、ここでの計算は不要
 
   // ★ PERFORMANCE OPTIMIZATION: memoizedPagesData removed
   // Data processing now handled individually by each TaskFolder component
@@ -906,7 +760,7 @@ export const useTasksScreenLogic = () => {
       resolveLock!();
       reorderLockRef.current = null;
     }
-  }, [tasks, noFolderName, sortMode, getBaseOrderForFolder, setTasks, setIsTaskReorderMode]);
+  }, [tasks, noFolderName, sortMode, getBaseOrderForFolder]);
 
   // Wrapper for the new drag and drop system
   const createTaskReorderHandler = useCallback((folderName: string) => {
@@ -951,7 +805,7 @@ export const useTasksScreenLogic = () => {
 
   // ===== CENTRALIZED DRAG & DROP HANDLERS =====
   
-  // Utility to get pending tasks for a specific folder
+  // ✅ ユーティリティ関数は必要に応じてローカルで保持（ストアにないもののみ）
   const getPendingTasksForFolder = useCallback((folderName: string): DisplayableTaskItem[] => {
     const currentPending = pendingTasksByFolder.get(folderName);
     if (currentPending) {
@@ -964,242 +818,17 @@ export const useTasksScreenLogic = () => {
       .map(task => ({ ...task, keyId: task.id }));
   }, [pendingTasksByFolder, baseProcessedTasks, noFolderName, activeTab]);
 
-  // Utility to update pending tasks for a folder
-  const updatePendingTasks = useCallback((folderName: string, newTasks: DisplayableTaskItem[]) => {
-    setPendingTasksByFolder(prev => {
-      const newMap = new Map(prev);
-      newMap.set(folderName, newTasks);
-      return newMap;
-    });
-  }, []);
+  // ✅ updatePendingTasks と clearDragState はストアで管理されているため削除
 
-  // Utility to clear drag state
-  const clearDragState = useCallback(() => {
-    InteractionManager.runAfterInteractions(() => {
-      isDragMode.value = false;
-      draggedItemId.value = '';
-      draggedItemY.value = 0;
-      dragTargetIndex.value = -1;
-      draggedItemOriginalIndex.value = -1;
-      draggedItemFolderName.value = '';
-      scrollEnabled.value = true;
-    });
-  }, [isDragMode, draggedItemId, draggedItemY, dragTargetIndex, draggedItemOriginalIndex, draggedItemFolderName, scrollEnabled]);
+  // ✅ handleLongPressStart はストアから取得するため削除
 
-  // Long press start handler (centralized)
-  const handleLongPressStart = useCallback((itemId: string, folderName: string) => {
-    console.log('🔥 Centralized long press detected for item:', itemId, 'folder:', folderName);
-    console.log('🔥 Current isTaskReorderMode:', isTaskReorderMode, 'isSelecting:', selectionHook.isSelecting);
-    
-    if (isTaskReorderMode || selectionHook.isSelecting) {
-      console.log('🔥 Long press blocked - already in reorder mode or selecting');
-      return;
-    }
-    
-    console.log('🔥 Entering task reorder mode from centralized handler');
-    setIsTaskReorderMode(true);
-    console.log('🔥 setIsTaskReorderMode(true) called');
-    
-    // ✅ 修正: 全フォルダのpendingTasksを初期化
-    console.log('🔥 Initializing pending tasks for all folders...');
-    
-    // Get all folder names from current tasks
-    const allFolderNames = Array.from(new Set(baseProcessedTasks.map(t => t.folder || noFolderName)));
-    const newPendingTasksByFolder = new Map<string, DisplayableTaskItem[]>();
-    const newHasChangesByFolder = new Map<string, boolean>();
-    
-    for (const currentFolderName of allFolderNames) {
-      const folderTasks = baseProcessedTasks
-        .filter(task => (task.folder || noFolderName) === currentFolderName)
-        .filter(task => activeTab === 'completed' ? task.isTaskFullyCompleted : !task.isTaskFullyCompleted)
-        .map(task => ({ ...task, keyId: task.id }));
-      
-      if (folderTasks.length > 0) {
-        newPendingTasksByFolder.set(currentFolderName, [...folderTasks]);
-        newHasChangesByFolder.set(currentFolderName, false);
-        console.log(`🔥 Initialized pending tasks for folder "${currentFolderName}" with ${folderTasks.length} tasks`);
-      }
-    }
-    
-    setPendingTasksByFolder(newPendingTasksByFolder);
-    setHasChangesByFolder(newHasChangesByFolder);
-    
-    console.log('🔥 All pending tasks initialized successfully');
-    console.log('🔥 Initialized folders:', Array.from(newPendingTasksByFolder.keys()));
-  }, [isTaskReorderMode, selectionHook.isSelecting, baseProcessedTasks, noFolderName, activeTab]);
+  // ✅ handleDragUpdate はストアから取得するため削除
 
-  // Drag update handler (centralized)
-  const handleDragUpdate = useCallback((translationY: number, itemId: string, folderName: string) => {
-    const currentPendingTasks = getPendingTasksForFolder(folderName);
-    
-    // Initialize drag mode
-    if (!isDragMode.value) {
-      isDragMode.value = true;
-      draggedItemId.value = itemId;
-      draggedItemFolderName.value = folderName;
-      scrollEnabled.value = false;
-      
-      // Store original index
-      const originalIndex = currentPendingTasks.findIndex(task => task.keyId === itemId);
-      draggedItemOriginalIndex.value = originalIndex;
-    }
-    
-    // Calculate target index for spacing animation
-    const itemHeight = 80;
-    const originalIndex = draggedItemOriginalIndex.value;
-    if (originalIndex === -1) return;
-    
-    const moveDistance = Math.round(translationY / itemHeight);
-    const newIndex = Math.max(0, Math.min(currentPendingTasks.length - 1, originalIndex + moveDistance));
-    
-    // Update target index for spacing calculation
-    if (Math.abs(moveDistance) >= 1) {
-      dragTargetIndex.value = newIndex;
-    } else {
-      dragTargetIndex.value = -1;
-    }
-  }, [getPendingTasksForFolder, isDragMode, draggedItemId, draggedItemFolderName, scrollEnabled, dragTargetIndex, draggedItemOriginalIndex]);
+  // ✅ handleDragEnd はストアから取得するため削除
 
-  // Drag end handler (centralized)
-  const handleDragEnd = useCallback((fromIndex: number, translationY: number, itemId: string, folderName: string) => {
-    console.log(`🔥 Centralized drag ended: fromIndex=${fromIndex}, translationY=${translationY}, itemId=${itemId}, folder=${folderName}`);
-    
-    const currentPendingTasks = getPendingTasksForFolder(folderName);
-    
-    // ✅ 修正: 渡されたfromIndexを使わず、最新のpendingTasksから実際のインデックスを再計算
-    const actualFromIndex = currentPendingTasks.findIndex(task => task.keyId === itemId);
-    console.log(`🔥 Recalculated actualFromIndex: ${actualFromIndex} (was passed fromIndex: ${fromIndex})`);
-    
-    // Validate inputs with recalculated index
-    if (actualFromIndex === -1) {
-      console.log('🔥 Item not found in current pending tasks, clearing drag state');
-      clearDragState();
-      return;
-    }
-    
-    if (actualFromIndex < 0 || actualFromIndex >= currentPendingTasks.length) {
-      console.log('🔥 Invalid actualFromIndex, clearing drag state');
-      clearDragState();
-      return;
-    }
-    
-    const draggedTask = currentPendingTasks[actualFromIndex];
-    if (!draggedTask || draggedTask.keyId !== itemId) {
-      console.log('🔥 Dragged task validation failed, clearing drag state');
-      clearDragState();
-      return;
-    }
-    
-    const itemHeight = 80;
-    const moveDistance = Math.round(translationY / itemHeight);
-    let newIndex = Math.max(0, Math.min(currentPendingTasks.length - 1, actualFromIndex + moveDistance));
-    
-    console.log(`🔥 Drag calculation: actualFromIndex=${actualFromIndex}, moveDistance=${moveDistance}, newIndex=${newIndex}`);
-    
-    if (newIndex !== actualFromIndex && Math.abs(moveDistance) >= 1) {
-      console.log(`🔥 Reordering task "${draggedTask.title}" from ${actualFromIndex} to ${newIndex} in folder ${folderName}`);
-      
-      const newTasks = [...currentPendingTasks];
-      const [movedItem] = newTasks.splice(actualFromIndex, 1);
-      newTasks.splice(newIndex, 0, movedItem);
-      
-      console.log('🔥 New task order:', newTasks.map(t => t.title));
-      
-      // Update pending tasks
-      updatePendingTasks(folderName, newTasks);
-      
-      // Mark as having changes
-      setHasChangesByFolder(prev => {
-        const newMap = new Map(prev);
-        newMap.set(folderName, true);
-        return newMap;
-      });
-    } else {
-      console.log('🔥 No reordering needed or insufficient movement distance');
-    }
-    
-    // Clear drag state after interaction
-    clearDragState();
-  }, [getPendingTasksForFolder, updatePendingTasks, clearDragState]);
+  // ✅ handleTaskReorderConfirm はストアから取得するため削除
 
-  // Task reorder mode handlers (centralized)
-  const handleTaskReorderConfirm = useCallback(async () => {
-    console.log('🔥 Centralized reorder confirm');
-    console.log('🔥 Current pendingTasksByFolder:', pendingTasksByFolder);
-    console.log('🔥 Current hasChangesByFolder:', hasChangesByFolder);
-    
-    try {
-      // ✅ 修正: pendingTasksの新しい順序を直接tasksに反映
-      const updatedTasks = [...tasks];
-      let hasAnyChanges = false;
-      
-      // Process all pending changes for each folder
-      for (const [folderName, pendingTasks] of pendingTasksByFolder.entries()) {
-        const hasChanges = hasChangesByFolder.get(folderName);
-        if (!hasChanges || !pendingTasks || pendingTasks.length === 0) {
-          console.log(`🔥 Skipping folder ${folderName}: no changes or no tasks`);
-          continue;
-        }
-        
-        console.log(`🔥 Processing reorder for folder: ${folderName} with ${pendingTasks.length} tasks`);
-        console.log('🔥 New order:', pendingTasks.map((t, i) => `${i}: ${t.title}`));
-        
-        // Get the base order for this folder
-        const baseOrder = getBaseOrderForFolder(folderName);
-        
-        // Update customOrder for all tasks in this folder based on new pending order
-        for (let newIndex = 0; newIndex < pendingTasks.length; newIndex++) {
-          const pendingTask = pendingTasks[newIndex];
-          const taskIndex = updatedTasks.findIndex(t => t.id === pendingTask.id);
-          
-          if (taskIndex !== -1) {
-            const newCustomOrder = baseOrder + (newIndex * 10);
-            console.log(`🔥 Updating task "${pendingTask.title}": customOrder = ${newCustomOrder}`);
-            
-            updatedTasks[taskIndex] = {
-              ...updatedTasks[taskIndex],
-              customOrder: newCustomOrder
-            };
-            hasAnyChanges = true;
-          }
-        }
-      }
-      
-      if (hasAnyChanges) {
-        console.log('🔥 Applying task order changes to main tasks array');
-        setTasks(updatedTasks);
-        
-        // Sync to database
-        console.log('🔥 Starting database sync for reordered tasks');
-        await syncTasksToDatabase(tasks, updatedTasks);
-        console.log('🔥 Database sync completed for reordered tasks');
-      }
-      
-      // Switch to custom sort mode if not already
-      if (sortMode !== 'custom') {
-        console.log('🔥 Switching to custom sort mode');
-        setSortMode('custom');
-      }
-      
-      console.log('🔥 Task reorder confirmation completed successfully');
-    } catch (error) {
-      console.error('🔥 Error confirming task reorder:', error);
-    } finally {
-      // Clean up reorder mode state
-      console.log('🔥 Cleaning up reorder mode state');
-      setIsTaskReorderMode(false);
-      setPendingTasksByFolder(new Map());
-      setHasChangesByFolder(new Map());
-    }
-  }, [pendingTasksByFolder, hasChangesByFolder, tasks, noFolderName, getBaseOrderForFolder, sortMode, setSortMode, syncTasksToDatabase]);
-
-  const handleTaskReorderCancel = useCallback(() => {
-    console.log('🔥 Centralized reorder cancel');
-    setIsTaskReorderMode(false);
-    setPendingTasksByFolder(new Map());
-    setHasChangesByFolder(new Map());
-    clearDragState();
-  }, [clearDragState]);
+  // ✅ handleTaskReorderCancel はストアから取得するため削除
 
   // Check if any folder has changes
   const hasAnyChanges = useMemo(() => {
@@ -1207,58 +836,63 @@ export const useTasksScreenLogic = () => {
   }, [hasChangesByFolder]);
 
   return {
-    tasks, folderOrder, loading, activeTab, selectedFolderTabName, sortMode, sortModalVisible,
-    isReordering, draggingFolder, isTaskReorderMode, renameModalVisible, renameTarget,
-    selectionAnim, folderTabLayouts, selectedTabIndex, // ★ currentContentPage の代わりに selectedTabIndex を返す
+    // ✅ ストアから取得した状態
+    tasks, folderOrder, loading, activeTab, sortMode, isTaskReorderMode, isRefreshing,
+    baseProcessedTasks,
+    pendingTasksByFolder, hasChangesByFolder, isScrollEnabled,
+    
+    // ✅ ローカルUI状態
+    selectedFolderTabName, sortModalVisible, isReordering, draggingFolder, 
+    renameModalVisible, renameTarget,
+    selectionAnim, folderTabLayouts, selectedTabIndex,
     pageScrollPosition,
-    noFolderName, folderTabs,
+    
+    // ✅ 計算値
+    noFolderName, folderTabs, hasAnyChanges,
+    
+    // ✅ refs
     pagerRef, folderTabsScrollViewRef,
+    
+    // ✅ 選択状態（context）
     isSelecting: selectionHook.isSelecting,
     selectedItems: selectionHook.selectedItems,
-    isRefreshing,
-    baseProcessedTasks, // ★ Replace memoizedPagesData with raw processed tasks
-    setActiveTab, setSelectedFolderTabName, setSortMode, setSortModalVisible,
-    setIsReordering, setDraggingFolder, setRenameModalVisible, setRenameTarget,
-    setFolderTabLayouts,
+    
+    // ✅ ストアから取得したアクション
+    setActiveTab, setSortMode, setIsTaskReorderMode,
     toggleTaskDone,
-    moveFolderOrder, stopReordering, toggleTaskReorderMode, setIsTaskReorderMode,
-    onLongPressSelectItem, cancelSelectionMode,
-    handleFolderTabPress, handlePageSelected, handlePageScroll,
-    handleSelectAll, handleDeleteSelected, confirmDelete,
-
-    handleRenameFolderSubmit, handleReorderSelectedFolder, openRenameModalForSelectedFolder,
-    handleTaskReorder,
-    createTaskReorderHandler,
-    handleFolderReorder,
-    handleRefresh,
-    // フォルダ操作用のクリーンアップ関数を公開
-    cleanupCustomOrdersForDeletedFolder,
-    updateCustomOrdersForRenamedFolder,
-    router, t,
-
-    // ===== CENTRALIZED DRAG & DROP EXPORTS =====
-    // State
-    pendingTasksByFolder,
-    hasChangesByFolder,
-    isScrollEnabled,
-    // Shared Values
-    isDragMode,
-    draggedItemId,
-    draggedItemY,
-    scrollEnabled,
-    dragTargetIndex,
-    draggedItemOriginalIndex,
-    draggedItemFolderName,
-    // Handlers
+    
+    // ✅ ストアから取得したドラッグ＆ドロップハンドラー
     handleLongPressStart,
     handleDragUpdate,
     handleDragEnd,
     handleTaskReorderConfirm,
     handleTaskReorderCancel,
-    // Utilities
+    
+    // ✅ ローカルUI状態セッター
+    setSelectedFolderTabName, setSortModalVisible,
+    setIsReordering, setDraggingFolder, setRenameModalVisible, setRenameTarget,
+    setFolderTabLayouts,
+    
+    // ✅ ローカルハンドラー（UI特化）
+    moveFolderOrder, stopReordering,
+    onLongPressSelectItem, cancelSelectionMode,
+    handleFolderTabPress, handlePageSelected, handlePageScroll,
+    handleSelectAll, handleDeleteSelected, confirmDelete,
+    handleRenameFolderSubmit, handleReorderSelectedFolder, openRenameModalForSelectedFolder,
+    handleTaskReorder, createTaskReorderHandler, handleFolderReorder, handleRefresh,
+    
+    // ✅ フォルダ操作用のクリーンアップ関数
+    cleanupCustomOrdersForDeletedFolder,
+    updateCustomOrdersForRenamedFolder,
+    
+    // ✅ Shared Values（workletで使用）
+    isDragMode, draggedItemId, draggedItemY, scrollEnabled,
+    dragTargetIndex, draggedItemOriginalIndex, draggedItemFolderName,
+    
+    // ✅ ユーティリティ
     getPendingTasksForFolder,
-    updatePendingTasks,
-    clearDragState,
-    hasAnyChanges,
+    
+    // ✅ その他
+    router, t,
   };
 };
