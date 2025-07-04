@@ -203,7 +203,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
 
   // ===== DRAG & DROP OPERATIONS =====
   handleLongPressStart: (itemId, folderName) => {
-    console.log('🔥 Store handleLongPressStart:', itemId, folderName);
+    // Performance: Removed console.log
     
     const { baseProcessedTasks, activeTab } = get();
     const noFolderName = 'フォルダなし'; // TODO: Get from translation
@@ -245,7 +245,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   },
 
   handleDragEnd: (fromIndex, translationY, itemId, folderName) => {
-    console.log('🔥 Store handleDragEnd:', { fromIndex, translationY, itemId, folderName });
+    // Performance: Removed console.log
     
     const { pendingTasksByFolder, hasChangesByFolder } = get();
     const currentPendingTasks = pendingTasksByFolder.get(folderName);
@@ -268,7 +268,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
     const newIndex = Math.max(0, Math.min(currentPendingTasks.length - 1, actualFromIndex + moveDistance));
     
     if (newIndex !== actualFromIndex && Math.abs(moveDistance) >= 1) {
-      console.log(`Reordering task from ${actualFromIndex} to ${newIndex} within folder: ${folderName}`);
+      // Performance: Removed console.log
       
       const newTasks = [...currentPendingTasks];
       const [movedItem] = newTasks.splice(actualFromIndex, 1);
@@ -288,7 +288,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   },
 
   handleTaskReorderConfirm: async () => {
-    console.log('🔥 Store handleTaskReorderConfirm');
+    // Performance: Removed console.log
     
     const { tasks, pendingTasksByFolder, folderOrder, syncTasksToDatabase } = get();
     const backupTasks = [...tasks];
@@ -330,7 +330,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   },
 
   handleTaskReorderCancel: () => {
-    console.log('🔥 Store handleTaskReorderCancel');
+    // Performance: Removed console.log
     set({
       isTaskReorderMode: false,
       pendingTasksByFolder: new Map(),

@@ -58,8 +58,7 @@ export const SafeGestureTaskItem = React.memo<SafeGestureTaskItemProps>(({
   const isDark = colorScheme === 'dark';
   const itemId = item.keyId;
   
-  // Debug: Track reorder mode
-  console.log('🔥 SafeGestureTaskItem render - folderName:', folderName, 'itemId:', itemId, 'isTaskReorderMode:', isTaskReorderMode);
+  // Performance: Removed console.log for better performance
   
   // Local animation state for this item
   const dragTranslateY = useSharedValue(0);
@@ -79,7 +78,7 @@ export const SafeGestureTaskItem = React.memo<SafeGestureTaskItemProps>(({
     .minDuration(500)
     .onStart(() => {
       'worklet';
-      console.log('🔥 SafeGestureTaskItem LongPress gesture triggered for:', itemId, 'folder:', folderName);
+      // Performance: Removed console.log
       if (onLongPressStart) {
         runOnJS(onLongPressStart)(itemId, folderName);
       }

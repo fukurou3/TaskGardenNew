@@ -273,6 +273,15 @@ export const TaskItem = memo(({
     prevProps.currentTab === nextProps.currentTab &&
     prevProps.isDraggable === nextProps.isDraggable &&
     prevProps.isActive === nextProps.isActive &&
-    JSON.stringify(prevProps.task.deadlineDetails) === JSON.stringify(nextProps.task.deadlineDetails)
+    // ✅ パフォーマンス最適化: JSON.stringifyを避けてオブジェクト比較
+    (() => {
+      const prev = prevProps.task.deadlineDetails;
+      const next = nextProps.task.deadlineDetails;
+      if (prev === next) return true;
+      if (!prev || !next) return false;
+      return prev.deadline === next.deadline &&
+             prev.repeatFrequency === next.repeatFrequency &&
+             prev.repeatStartDate === next.repeatStartDate;
+    })()
   );
 });

@@ -64,11 +64,58 @@ export const useTasksScreenLogic = () => {
   const setIsDataInitialized = useTaskStore(state => state.setIsDataInitialized);
   const setIsRefreshing = useTaskStore(state => state.setIsRefreshing);
   const syncTasksToDatabase = useTaskStore(state => state.syncTasksToDatabase);
-  const handleLongPressStart = useTaskStore(state => state.handleLongPressStart);
-  const handleDragUpdate = useTaskStore(state => state.handleDragUpdate);
-  const handleDragEnd = useTaskStore(state => state.handleDragEnd);
+  const storeHandleLongPressStart = useTaskStore(state => state.handleLongPressStart);
+  const storeHandleDragUpdate = useTaskStore(state => state.handleDragUpdate);
+  const storeHandleDragEnd = useTaskStore(state => state.handleDragEnd);
   const handleTaskReorderConfirm = useTaskStore(state => state.handleTaskReorderConfirm);
   const handleTaskReorderCancel = useTaskStore(state => state.handleTaskReorderCancel);
+
+  // ✅ Shared Valuesを更新するラッパー関数（アニメーション復活）
+  const handleLongPressStart = useCallback((itemId: string, folderName: string) => {
+    // Shared Valuesを更新してアニメーションを有効化
+    isDragMode.value = true;
+    draggedItemId.value = itemId;
+    draggedItemFolderName.value = folderName;
+    scrollEnabled.value = false;
+    
+    // ストアの処理を実行
+    storeHandleLongPressStart(itemId, folderName);
+  }, [isDragMode, draggedItemId, draggedItemFolderName, scrollEnabled, storeHandleLongPressStart]);
+
+  const handleDragUpdate = useCallback((translationY: number, itemId: string, folderName: string) => {
+    // Shared Valuesを更新
+    draggedItemY.value = translationY;
+    
+    // ドラッグターゲットインデックスを計算
+    const itemHeight = 80;
+    const moveDistance = Math.round(translationY / itemHeight);
+    const currentPendingTasks = pendingTasksByFolder.get(folderName);
+    if (currentPendingTasks) {
+      const originalIndex = currentPendingTasks.findIndex(task => task.keyId === itemId);
+      if (originalIndex !== -1) {
+        draggedItemOriginalIndex.value = originalIndex;
+        const newTargetIndex = Math.max(0, Math.min(currentPendingTasks.length - 1, originalIndex + moveDistance));
+        dragTargetIndex.value = newTargetIndex;
+      }
+    }
+    
+    // ストアの処理を実行
+    storeHandleDragUpdate(translationY, itemId, folderName);
+  }, [draggedItemY, dragTargetIndex, draggedItemOriginalIndex, pendingTasksByFolder, storeHandleDragUpdate]);
+
+  const handleDragEnd = useCallback((fromIndex: number, translationY: number, itemId: string, folderName: string) => {
+    // アニメーションをリセット
+    isDragMode.value = false;
+    draggedItemId.value = '';
+    draggedItemY.value = 0;
+    draggedItemFolderName.value = '';
+    scrollEnabled.value = true;
+    dragTargetIndex.value = -1;
+    draggedItemOriginalIndex.value = -1;
+    
+    // ストアの処理を実行
+    storeHandleDragEnd(fromIndex, translationY, itemId, folderName);
+  }, [isDragMode, draggedItemId, draggedItemY, draggedItemFolderName, scrollEnabled, dragTargetIndex, draggedItemOriginalIndex, storeHandleDragEnd]);
 
   // ✅ ローカル状態のみを管理（UIに特化した状態）
   const [selectedFolderTabName, setSelectedFolderTabName] = useState<string>('all');
@@ -79,7 +126,7 @@ export const useTasksScreenLogic = () => {
   const [renameTarget, setRenameTarget] = useState<string | null>(null);
 
   // ===== DRAG & DROP STATE MANAGEMENT =====
-  // ✅ Shared valuesはストアとは別に管理（workletで使用するため）
+  // ✅ Shared valuesはuseTasksScreenLogicで管理（アニメーション用）
   const isDragMode = useSharedValue(false);
   const draggedItemId = useSharedValue<string>('');
   const draggedItemY = useSharedValue(0);
@@ -96,7 +143,8 @@ export const useTasksScreenLogic = () => {
   // ★ ちらつきの原因となっていた currentContentPage を廃止し、新しい確定状態を導入
   const [selectedTabIndex, setSelectedTabIndex] = useState(0);
 
-  const [pageScrollPosition, setPageScrollPosition] = useState(0);
+  // ✅ アクセントラインアニメーション用のAnimated.Value
+  const pageScrollPosition = useRef(new Animated.Value(0)).current;
 
   const noFolderName = useMemo(() => t('common.no_folder_name', 'フォルダなし'), [t]);
 
@@ -213,13 +261,13 @@ export const useTasksScreenLogic = () => {
 
   // ✅ syncTasksToDatabase はストアから取得するため削除
 
-  const saveFolderOrderToStorage = async (orderToSave: FolderOrder) => {
+  const saveFolderOrderToStorage = useCallback(async (orderToSave: FolderOrder) => {
     try {
       await setItem(FOLDER_ORDER_KEY, JSON.stringify(orderToSave));
     } catch (e) {
       console.error('Failed to save folder order to storage:', e);
     }
-  };
+  }, []);
 
   // フォルダ別のベースオーダーを計算する関数
   const getBaseOrderForFolder = useCallback((folderName: string): number => {
@@ -279,15 +327,16 @@ export const useTasksScreenLogic = () => {
       setSelectedTabIndex(index);
       // PagerView をプログラムで操作
       pagerRef.current?.setPage(index);
-      // アニメーション値を更新して、UIの追従を即座に開始させる（ちらつき防止）
-      setPageScrollPosition(index); // Simplified without animation
+      // ✅ アクセントラインアニメーション復活: Animated.Valueを更新
+      pageScrollPosition.setValue(index);
     }
   }, [selectedTabIndex]);
 
   const handlePageScroll = useCallback((event: PagerViewOnPageScrollEvent) => {
-    // PagerViewのスクロールに追従してアニメーション値を更新
-    setPageScrollPosition(event.nativeEvent.position + event.nativeEvent.offset);
-  }, []);
+    // ✅ アクセントラインアニメーション復活: Animated.Valueを更新
+    const scrollValue = event.nativeEvent.position + event.nativeEvent.offset;
+    pageScrollPosition.setValue(scrollValue);
+  }, [pageScrollPosition]);
 
   // ★ ページ切り替え完了時の処理を修正
   const handlePageSelected = useCallback((event: PagerViewOnPageSelectedEvent) => {
@@ -559,7 +608,7 @@ export const useTasksScreenLogic = () => {
     if (updatedTasks.some((task, index) => task !== tasks[index])) {
       setTasks(updatedTasks);
       await syncTasksToDatabase(tasks, updatedTasks);
-      console.log('CustomOrders cleaned up for deleted folder:', deletedFolderName);
+      // Performance: Removed console.log
     }
   }, [tasks, noFolderName]);
 
@@ -584,7 +633,7 @@ export const useTasksScreenLogic = () => {
 
     setTasks(updatedTasks);
     await syncTasksToDatabase(tasks, updatedTasks);
-    console.log('CustomOrders updated for renamed folder:', { oldFolderName, newFolderName });
+    // Performance: Removed console.log
   }, [tasks, noFolderName, getBaseOrderForFolder]);
 
   // CustomOrderのクリーンアップと正規化（tasksを依存から除外してループを防ぐ）
@@ -632,7 +681,7 @@ export const useTasksScreenLogic = () => {
     if (hasChanges) {
       setTasks(updatedTasks);
       await syncTasksToDatabase(currentTasks, updatedTasks);
-      console.log('CustomOrders normalized');
+      // Performance: Removed console.log
     }
   }, [folderOrder, noFolderName, getBaseOrderForFolder]);
 
@@ -660,16 +709,16 @@ export const useTasksScreenLogic = () => {
   const reorderLockRef = useRef<Promise<void> | null>(null);
 
   const handleTaskReorder = useCallback(async (folderName: string, fromIndex: number, toIndex: number) => {
-    console.log(`🔥 handleTaskReorder called: folder=${folderName}, from=${fromIndex}, to=${toIndex}`);
+    // Performance: Removed console.log
     
     if (fromIndex === toIndex) {
-      console.log('🔥 handleTaskReorder: fromIndex === toIndex, skipping');
+      // Performance: Removed console.log
       return;
     }
 
     // 並び替え操作のロック（前の操作が完了するまで待機）
     if (reorderLockRef.current) {
-      console.warn('🔥 Reorder operation already in progress, waiting...');
+      // Performance: Removed console.warn
       try {
         await reorderLockRef.current;
       } catch (error) {
@@ -731,9 +780,9 @@ export const useTasksScreenLogic = () => {
 
       // 🔥 Step 4: データベース同期（バックグラウンド）
       try {
-        console.log('🔥 Starting database sync...');
+        // Performance: Removed console.log
         await syncTasksToDatabase(currentTasks, optimisticTasks);
-        console.log('🔥 Database sync completed successfully');
+        // Performance: Removed console.log
         
         // Auto-exit task reorder mode after successful reorder
         setTimeout(() => {

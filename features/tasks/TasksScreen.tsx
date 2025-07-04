@@ -67,28 +67,41 @@ export default function TasksScreen() {
     tasks,
   } = logic;
 
-  // ✅ Debug: Track reorder mode state (commented out to prevent infinite loop)
-  // console.log('🔥 TasksScreen render - logic.isTaskReorderMode:', logic.isTaskReorderMode, 'taskReorderState.isReorderMode:', taskReorderState.isReorderMode);
+  // ✅ パフォーマンス最適化: toggleTaskDone関数をuseCallbackでメモ化
+  const memoizedToggleTaskDone = useCallback((id: string, instanceDate?: string) => {
+    return toggleTaskDone(id, instanceDate);
+  }, [toggleTaskDone]);
 
-  // ✅ baseProcessedTasksWithKeyIdをメモ化して不要な再レンダリングを防ぐ
+  // ✅ Debug: Track reorder mode state (removed for performance)
+
+  // ✅ パフォーマンス最適化: keyIdの追加を最小限に抑制
   const baseProcessedTasksWithKeyId = useMemo(() => {
+    // baseProcessedTasksが空の場合は早期リターン
+    if (!baseProcessedTasks || baseProcessedTasks.length === 0) {
+      return [];
+    }
+    // 既にkeyIdがある場合はマッピングを避ける
+    if (baseProcessedTasks[0] && 'keyId' in baseProcessedTasks[0]) {
+      return baseProcessedTasks as (typeof baseProcessedTasks[0] & { keyId: string })[];
+    }
     return baseProcessedTasks.map(task => ({ ...task, keyId: task.id }));
   }, [baseProcessedTasks]);
 
 
-  const handleSortOptionSelect = (newSortMode: SortMode) => {
+  // ✅ パフォーマンス最適化: handleSortOptionSelectをuseCallbackでメモ化
+  const handleSortOptionSelect = useCallback((newSortMode: SortMode) => {
     setSortMode(newSortMode);
     setSortModalVisible(false);
-  };
+  }, [setSortMode, setSortModalVisible]);
   
-  // 並べ替えモード状態変更ハンドラー
+  // ✅ 並べ替えモード状態変更ハンドラー（既に最適化済み）
   const handleReorderModeChange = useCallback((
     isReorderMode: boolean, 
     hasChanges: boolean, 
     onConfirm: () => void, 
     onCancel: () => void
   ) => {
-    console.log('🔥 TasksScreen handleReorderModeChange called:', { isReorderMode, hasChanges });
+    // Performance: Removed console.log
     
     setTaskReorderState(prev => {
       // 同じ状態の場合は更新しない
@@ -102,7 +115,7 @@ export default function TasksScreen() {
         onConfirm,
         onCancel,
       };
-      console.log('🔥 Setting new taskReorderState:', newState);
+      // Performance: Removed console.log
       return newState;
     });
   }, []);
@@ -166,7 +179,7 @@ export default function TasksScreen() {
           handlePageSelected={handlePageSelected}
           handlePageScroll={handlePageScroll}
           activeTab={activeTab}
-          toggleTaskDone={toggleTaskDone}
+          toggleTaskDone={memoizedToggleTaskDone}
           isReordering={isReordering}
           draggingFolder={draggingFolder}
           setDraggingFolder={setDraggingFolder}

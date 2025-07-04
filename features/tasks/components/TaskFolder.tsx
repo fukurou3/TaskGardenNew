@@ -109,10 +109,18 @@ export const TaskFolder = React.memo<Props>(({
 
   const noFolderName = t('common.no_folder_name', 'フォルダなし');
   
-  // ★ PERFORMANCE OPTIMIZATION: Individual task filtering and sorting with useMemo
+  // ✅ PERFORMANCE OPTIMIZATION: Early return and optimized filtering
   const filteredAndSortedTasks = useMemo(() => {
-    // Step 1: Filter tasks for this folder
-    let filteredTasks = tasks.filter(task => (task.folder || noFolderName) === folderName);
+    // Early return for empty tasks
+    if (!tasks || tasks.length === 0) {
+      return [];
+    }
+    
+    // Step 1: Filter tasks for this folder with optimized comparison
+    let filteredTasks = tasks.filter(task => {
+      const taskFolder = task.folder || noFolderName;
+      return taskFolder === folderName;
+    });
     
     // Step 2: Apply tab filtering (incomplete/completed)
     if (currentTab === 'completed') {
@@ -180,6 +188,7 @@ export const TaskFolder = React.memo<Props>(({
         return dateAVal.unix() - dateBVal.unix();
       }
 
+      // ✅ カスタム順は未完了タスクのカスタムモードでのみ適用
       if (sortMode === 'custom' && currentTab === 'incomplete') {
         const orderA = a.customOrder ?? Infinity;
         const orderB = b.customOrder ?? Infinity;
@@ -191,12 +200,12 @@ export const TaskFolder = React.memo<Props>(({
         return a.title.localeCompare(b.title);
       }
       
+      // ✅ その他の場合（期限順の完了タスクや、カスタム順以外）はタイトル順
       return a.title.localeCompare(b.title);
     });
   }, [tasks, folderName, noFolderName, currentTab, sortMode]);
   
-  // Debug: Track isTaskReorderMode changes
-  console.log('🔥 TaskFolder render - folderName:', folderName, 'isTaskReorderMode:', isTaskReorderMode);
+  // Performance: Removed console.log
   
 
 
@@ -346,10 +355,10 @@ export const TaskFolder = React.memo<Props>(({
               paddingBottom: isTaskReorderMode ? 20 : 8 
             }}
             removeClippedSubviews={true}
-            maxToRenderPerBatch={10}
-            updateCellsBatchingPeriod={50}
-            initialNumToRender={10}
-            windowSize={10}
+            maxToRenderPerBatch={5}  // ✅ パフォーマンス最適化: バッチサイズを削減
+            updateCellsBatchingPeriod={100}  // ✅ 更新頻度を下げる
+            initialNumToRender={6}  // ✅ 初期レンダリング数を削減
+            windowSize={8}  // ✅ 画面外のレンダリング範囲を制限
             showsVerticalScrollIndicator={true}
           />
         </View>
