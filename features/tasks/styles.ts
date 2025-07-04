@@ -212,6 +212,7 @@ export const createStyles = (isDark: boolean, subColor: string, fontSizeKey: Fon
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
+        padding: 20,
     },
     modalContainer: {
         justifyContent: 'center',
